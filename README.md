@@ -75,11 +75,11 @@ GaneshaDXW is initially focused on the **visual map mesh editor**.
 The web editor is built around a strict boundary:
 
 ```text
-consolidated JSON
+gmapx-consolidated mesh.json
   -> normalized MeshDocument
-  -> editable document store
-  -> renderer adapter
-  -> GPU buffers
+  -> editor state/history/selection
+  -> Three.js renderer adapter
+  -> triangulated GPU geometry
 ```
 
 The renderer consumes the document. It does not own the map model.
@@ -93,6 +93,13 @@ lossless .gmapx + source offsets/raw bytes
 
 This split lets the web editor stay practical while still respecting original-format compatibility.
 
+
+- `web/src/loaders/MapPackageLoader.ts` normalizes loader input.
+- `web/src/domain/mapDocument.ts` owns the editor document model.
+- `web/src/domain/editCommandHistory.ts` and `web/src/domain/selectionStore.ts` manage editor state.
+- `web/src/renderer/GaneshaThreeRendererAdapter.ts` consumes the document and builds renderable meshes.
+
+
 ***
 
 ## Current Implementation
@@ -102,29 +109,25 @@ The active browser migration lives in [`web/`](web/).
 **Implemented so far:**
 
 - Bun + Vite + TypeScript scaffold.
-- Three.js WebGPU renderer with WebGL2 fallback.
+- Uses **WebGPU first** and falls back to **WebGL2** when WebGPU is unavailable.
 - Renderer adapter boundary.
 - Consolidated JSON loader scaffold.
-- `MAP001` test fixture under `web/public/reports/gmapx-consolidated/`.
-- Normalized `MeshDocument` model.
+- Loads `web/public/reports/gmapx-consolidated/MAP001/mesh.json` into a normalized `MeshDocument`.
+- Falls back to a bundled TypeScript sample document if the JSON fixture cannot be loaded.
 - Source-format/provenance model.
 - Geometry builder for triangles and quads.
 - Material resolver with temporary visual materials.
 - Flat black untextured perimeter rendering.
-- GaneshaDX compatibility validation and clamping.
+- GaneshaDX compatibility validation and sanitization for GaneshaDX-style limits for vertex ranges, UV ranges, palette IDs, texture pages, and terrain fields.
 - Document-driven scene tree.
 - Polygon selection from UI.
 - Vertex selection from UI.
 - Canvas raycast polygon picking.
 - Near-vertex picking path.
 - Per-vertex translation controls.
-- Undo/redo edit history.
+- Undo/redo and reset-to-loaded-document edit history.
 - Modified `mesh.json` export/download.
 - Visible compatibility status panel.
-
-*Current testing GUI note:*
- 
- The current hand-written DOM GUI is good enough for early testing. Once more editing tools are incorporated, the project should evaluate a more durable GUI approach: React, Solid, Svelte, dockable panels, command palette, keyboard shortcuts, inspector forms, and reusable editor components.
 
 ***
 
@@ -158,6 +161,8 @@ The web editor must stay compatible with constraints enforced by the original Ga
 - Load `palettes.master.json`.
 - Load `base-textures.json`.
 - Load `texture-mapping.json`.
+- Load from GaneshaDX files.
+- Load from binary source.
 - Load and display `metadata.json`.
 - Implement real indexed texture upload.
 - Implement palette lookup shader.
@@ -165,6 +170,7 @@ The web editor must stay compatible with constraints enforced by the original Ga
 - Apply `texturePage` and page-local UV mapping correctly.
 - Add material keys based on texture and palette identity.
 - Preserve consolidated schema shape on export.
+- Lossless round-tripping or binary patching.
 
 **Editor tools:**
 
@@ -205,7 +211,7 @@ The web editor must stay compatible with constraints enforced by the original Ga
 
 ***
 
-## Roadmap
+## 🛣️📍 Roadmap 🚗🛣️
 
 ### Phase 0 - Preserve the Reference
 
@@ -265,7 +271,7 @@ The web editor must stay compatible with constraints enforced by the original Ga
 
 ***
 
-## Running the Web Editor
+## ⚙️⚡️⚙️ Running the Web Editor ⚙️⚡️⚙️
 
 ```bash
 cd web
@@ -288,7 +294,7 @@ bun run build
 
 ***
 
-## Repository Notes
+## 📓📑 Repository Notes 🗒️✍️
 
 - Root MonoGame files are retained as source/reference material.
 - Web migration documentation lives in [`Web-Migration/`](Web-Migration/).
@@ -298,23 +304,23 @@ bun run build
 ***
 
 ```text
-│                                                                                 │
-│   "N  A  M  E  S                                                                │
-│                     d o n ' t                                                   │
-│                                   m  a  t  t  e  r  .  .  .                     │
-│                                                                                 │
-│                                                                                 │
-│   What's important  is      H O W   Y O U   L I V E   your   L I F E .          │
-│                                                                                 │
-│                                                                                 │
-│                 T h e   m o m e n t    'P R I D E'      is       l o s t ,      │
-│                                                                                 │
-│         'F   R   E   E   D   O   M'     i s    a l s o    L   O   S   T . . ."  │
-│                                                                                 │
-│                                                                                 │
-│     /\___        _     _    __  /\__         _                _     /\/\        │
-│/\  /     \/\  /\/ \_  / \__/  \/    \_/\/\  / \_/\____  __   / \  _/    \/ \  /\│
-   \/         \/      \/                   \/           \/  \_/   \/          \/ 
+⥍│                                        ☄︎                    ✧                   │
+⥾│  " 𝓝  𝛢  𝜧  𝝣  𝚂        ~                  ✦                        ✧          │
+⥏│             ~       d o n ' t       ~                         ⚬                 ⦙│
+⇵│  ⚬     ✧                   ~       𝚖  𝚊  𝚝  𝚝  𝚎  𝚛       ~       ✦         ✧    │
+⥿│                  ✦                           ✧                                  │
+⥽│  ✧                        ⚭         ⚬                                  ✦        │
+⥯│   What's   important   is     𝛨 𝟶 𝝎   you   𝐋 𝐈 𝐕 𝐄   your   𝙻 𝙸 𝙵 𝙴            │
+⥽│     ✧                       ☓        ☓            ⚬      ✧                 ✦    ⦙│
+⥍│               ☌                                                               ⭐︎ │
+⥼│       ⥏     ✦    T h e   m o m e n t    '𝕻 𝕽 𝕴 𝕯 𝕰'      is       𝖑 𝖔 𝔰 𝔱 ,      │
+⥿│  ⚭                                                                              ⦙│
+⥼│⥌       '_𝙁_._𝙍_._𝙀_._𝙀_._𝘿_._𝙊_._𝙈_'     i s    a l s o    ⫶𝐥⫶   ⫶𝐨⫶   ⫶𝐬⫶   𝐭⫶ . . . "│
+⥌│    ☌                                                    ☌                        │
+⥑│            ☩                    ⚬                   ⚬                         ☽  │
+⦙│     /\___        _     _    __  /\__      ⚬  ⚬_          ☼     _     /\/\        │
+│/\  /     \/\  /\/ \_ ⚭/ \__/  \/    \_/\  /\/ \_/\____  __   / \  _/    \/ \  /\│
+   \/         \/      \/                  \/            \/  \_/   \/          \/ 
    
-      🎮 🧝🏻‍♀️ ⚔️     GaneshaDXW     ⛓️‍💥 📀     Final Fantasy Hactics     🛡️ 🧙 💻
+      🎮 🧝🏻‍♀️ ⚔️     ₲₳₦€𝗦₶₳ 𝙳𝕏𝙻    ⛓️‍💥 📀     𝓕¡𝜂𝕒𝘓 𝓕𝞪⨅†𝜶𝛓𝜓 ℍ∆©𝜯𝚒¢₷     🛡️ 🧙 💻
 ```
