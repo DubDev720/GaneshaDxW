@@ -1,3 +1,5 @@
+import { sanitizeVertexPosition } from "./compatibility";
+
 export type Vec2 = readonly [number, number];
 export type Vec3 = readonly [number, number, number];
 
@@ -13,6 +15,12 @@ export interface MapPolygon {
   uv?: readonly Vec2[];
   texturePage?: number;
   paletteId?: number;
+  terrainBinding?: {
+    terrainX: number;
+    terrainZ: number;
+    terrainLevel: number;
+  };
+  preserved?: Record<string, unknown>;
   isTextured: boolean;
 }
 
@@ -35,6 +43,46 @@ export interface MeshDocumentStore {
   updateVertexPosition(vertexId: string, position: Vec3): MeshDocumentStore;
 }
 
+export function getPolygon(document: MeshDocument, polygonId: string | null): MapPolygon | undefined {
+  if (!polygonId) {
+    return undefined;
+  }
+
+  for (const section of document.sections) {
+    const polygon = section.polygons.find((candidate) => candidate.id === polygonId);
+    if (polygon) {
+      return polygon;
+    }
+  }
+
+  return undefined;
+}
+
+export function updateVertexPositionInDocument(
+  document: MeshDocument,
+  vertexId: string,
+  position: Vec3,
+): MeshDocument {
+  return new InMemoryMeshDocumentStore(document).updateVertexPosition(vertexId, position).document;
+}
+
+export function nudgeVertexPosition(
+  document: MeshDocument,
+  vertexId: string,
+  delta: Vec3,
+): MeshDocument {
+  const vertex = document.vertices.find((candidate) => candidate.id === vertexId);
+  if (!vertex) {
+    return document;
+  }
+
+  return updateVertexPositionInDocument(document, vertexId, [
+    vertex.ganeshaDxPosition[0] + delta[0],
+    vertex.ganeshaDxPosition[1] + delta[1],
+    vertex.ganeshaDxPosition[2] + delta[2],
+  ]);
+}
+
 export class InMemoryMeshDocumentStore implements MeshDocumentStore {
   readonly document: MeshDocument;
 
@@ -47,13 +95,15 @@ export class InMemoryMeshDocumentStore implements MeshDocumentStore {
   }
 
   updateVertexPosition(vertexId: string, position: Vec3): MeshDocumentStore {
+    const compatiblePosition = sanitizeVertexPosition(position);
+
     return new InMemoryMeshDocumentStore({
       ...this.document,
       vertices: this.document.vertices.map((vertex) =>
         vertex.id === vertexId
           ? {
               ...vertex,
-              ganeshaDxPosition: position,
+              ganeshaDxPosition: compatiblePosition,
             }
           : vertex,
       ),

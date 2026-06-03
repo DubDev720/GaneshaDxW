@@ -1,4 +1,5 @@
 import type { MeshDocument } from "./mapDocument";
+import type { CompatibilityIssue } from "./compatibility";
 
 export type SourceFormat = "gmapx-consolidated" | "ganesha-original";
 
@@ -13,4 +14,5 @@ export interface SourceProvenance {
 export interface LoadedMapPackage {
   document: MeshDocument;
   provenance: SourceProvenance;
+  compatibilityIssues: readonly CompatibilityIssue[];
 }

@@ -28,12 +28,9 @@ export class MaterialResolver {
 
   resolveSelectionMaterial(): THREE.Material {
     return this.getMaterial("selection", () =>
-      new THREE.MeshBasicMaterial({
+      new THREE.LineBasicMaterial({
         color: 0xffffff,
-        transparent: true,
-        opacity: 0.28,
         depthTest: false,
-        side: THREE.DoubleSide,
       }),
     );
   }
