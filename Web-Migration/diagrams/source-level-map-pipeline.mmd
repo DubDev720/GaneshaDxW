@@ -1,0 +1,27 @@
+flowchart TD
+  File["GNS map file"]
+  FileBrowser["Common/FileBrowser.cs"]
+  MapData["Resources/MapData.cs"]
+  Gns["Gns parser / resource rows"]
+  CurrentMapState["Resources/CurrentMapState.cs"]
+  StateData["Resources/ContentDataTypes/MapStateData.cs"]
+  MeshResource["Resources/ResourceContent/MeshResourceData.cs"]
+  Polygon["Resources/ContentDataTypes/Polygons/Polygon.cs"]
+  SceneRenderer["Rendering/SceneRenderer.cs"]
+  Stage["Environment/Stage.cs"]
+  Exporter["Common/GlbExporter.cs"]
+  Three["Three.js target schema"]
+
+  File --> FileBrowser
+  FileBrowser --> MapData
+  MapData --> Gns
+  Gns --> MeshResource
+  MeshResource --> StateData
+  StateData --> CurrentMapState
+  StateData --> Polygon
+  CurrentMapState --> SceneRenderer
+  SceneRenderer --> Stage
+  Polygon --> Exporter
+  StateData --> Three
+  Polygon --> Three
+  MeshResource --> Three

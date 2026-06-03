@@ -1,0 +1,14 @@
+flowchart TD
+  Shader["Content/FFTPolygonShader.fx"]
+  ContentXnb["Content/bin/DesktopGL/Content/FFTPolygonShader.xnb"]
+  Stage["Environment/Stage.cs"]
+  SceneRenderer["Rendering/SceneRenderer.cs"]
+  TextureWindow["UserInterface/GuiForms/GuiWindowTextureElement.cs"]
+  BasicEffect["MonoGame BasicEffect"]
+
+  Shader -->|"compiled by MGCB"| ContentXnb
+  Stage -->|"Content.Load<Effect>(FFTPolygonShader)"| ContentXnb
+  Stage -->|"owns FftPolygonEffect"| SceneRenderer
+  SceneRenderer -->|"sets UsesAnimatedUvN / Canvas / Source"| Stage
+  TextureWindow -->|"sets palette/light/texture params"| Stage
+  TextureWindow -->|"fallback/simple preview paths"| BasicEffect

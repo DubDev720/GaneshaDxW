@@ -1,0 +1,145 @@
+# Portability and Platform Risk Surface
+
+Generated from targeted static source search.
+
+## Search patterns
+
+- `\bNativeFileDialog\b`
+- `\bDllImport\b`
+- `\bWindows\b`
+- `\bWin32\b`
+- `\bSystem\.Drawing\b`
+- `\bProcess\b`
+- `\bThread\b`
+- `\bClipboard\b`
+- `\bMicrosoft\.Xna\b`
+- `\bMonoGame\b`
+- `\bContentManager\b`
+- `\bXNB\b`
+- `\bMGCB\b`
+
+## Matches
+
+- `Ganesha.cs:11` — `using Microsoft.Xna.Framework;`
+- `Ganesha.cs:12` — `using Microsoft.Xna.Framework.Graphics;`
+- `Common\CameraRay.cs:4` — `using Microsoft.Xna.Framework;`
+- `Common\CameraRayResults.cs:1` — `ï»¿using Microsoft.Xna.Framework;`
+- `Common\ConfigurationProperties.cs:1` — `ï»¿using Microsoft.Xna.Framework;`
+- `Common\FpsCounter.cs:5` — `using Microsoft.Xna.Framework;`
+- `Common\FpsCounter.cs:6` — `using Microsoft.Xna.Framework.Graphics;`
+- `Common\GameViewOverlay.cs:3` — `using Microsoft.Xna.Framework;`
+- `Common\GlbExporter.cs:12` — `using System.Drawing.Imaging;`
+- `Common\GlbExporter.cs:16` — `using Microsoft.Xna.Framework;`
+- `Common\GlbExporter.cs:20` — `using MTex2D = Microsoft.Xna.Framework.Graphics.Texture2D;`
+- `Common\GlbExporter.cs:83` — `List<Microsoft.Xna.Framework.Vector2> uvs = polygon.UvCoordinates;`
+- `Common\GlbExporter.cs:85` — `List<Microsoft.Xna.Framework.Vector3> animatedVertices = new() {`
+- `Common\GlbExporter.cs:110` — `List<Microsoft.Xna.Framework.Vector2> uvs = polygon.UvCoordinates;`
+- `Common\GlbExporter.cs:112` — `List<Microsoft.Xna.Framework.Vector3> animatedVertices = new() {`
+- `Common\GlbExporter.cs:238` — `System.Drawing.Color convertedColor = System.Drawing.Color.FromArgb(textureColor.A, textureColor.R, textureColor.G, textureColor.B);`
+- `Common\GlbExporter.cs:265` — `indexedPngPaletteColor = new RGBQUAD(System.Drawing.Color.FromArgb(`
+- `Common\GlbExporter.cs:292` — `private static Vector3 ConvertAndScaleVector3(Microsoft.Xna.Framework.Vector3 vector3) {`
+- `Common\GlbExporter.cs:296` — `private static VertexPosition ConvertAndScaleVector3ToVertexPosition(Microsoft.Xna.Framework.Vector3 vector3) {`
+- `Common\GlbExporter.cs:300` — `private static Microsoft.Xna.Framework.Vector3 TranslateVertexToAnimatedPosition(Vertex vertex, MeshType meshType) {`
+- `Common\GlbExporter.cs:301` — `Microsoft.Xna.Framework.Vector3 animatedPosition = vertex.Position;`
+- `Common\GlbExporter.cs:320` — `animatedPosition = Microsoft.Xna.Framework.Vector3.Transform(animatedPosition, rotationX * rotationY * rotationZ);`
+- `Common\GlbExporter.cs:328` — `animatedPosition = Microsoft.Xna.Framework.Vector3.Transform(animatedPosition, scale);`
+- `Common\GlbExporter.cs:330` — `animatedPosition += new Microsoft.Xna.Framework.Vector3(`
+- `Common\GlbExporter.cs:339` — `private static Vector2 GetAdjustedUvCoordinates(Microsoft.Xna.Framework.Vector2 uv, int texturePage) {`
+- `Common\Greyboxer.cs:8` — `using Microsoft.Xna.Framework;`
+- `Common\Greyboxer.cs:9` — `using Microsoft.Xna.Framework.Graphics;`
+- `Common\OverlayConsole.cs:5` — `using Microsoft.Xna.Framework;`
+- `Common\OverlayConsole.cs:6` — `using Microsoft.Xna.Framework.Graphics;`
+- `Common\TerrainGenerator.cs:9` — `using Microsoft.Xna.Framework;`
+- `Common\TerrainGenerator.cs:412` — `// Process each polygon`
+- `Common\UniversalTextures.cs:2` — `using Microsoft.Xna.Framework;`
+- `Common\UniversalTextures.cs:3` — `using Microsoft.Xna.Framework.Graphics;`
+- `Common\Utilities.cs:6` — `using Microsoft.Xna.Framework;`
+- `Environment\Stage.cs:6` — `using Microsoft.Xna.Framework;`
+- `Environment\Stage.cs:7` — `using Microsoft.Xna.Framework.Content;`
+- `Environment\Stage.cs:8` — `using Microsoft.Xna.Framework.Graphics;`
+- `Environment\Stage.cs:29` — `public static ContentManager Content;`
+- `Environment\Stage.cs:47` — `ContentManager content,`
+- `Environment\StageCamera.cs:10` — `using Microsoft.Xna.Framework;`
+- `Environment\StageCamera.cs:11` — `using Microsoft.Xna.Framework.Input;`
+- `Rendering\Background.cs:4` — `using Microsoft.Xna.Framework;`
+- `Rendering\Background.cs:5` — `using Microsoft.Xna.Framework.Graphics;`
+- `Rendering\MeshAnimationController.cs:6` — `using Microsoft.Xna.Framework;`
+- `Rendering\MeshAnimationRoutine.cs:6` — `using Microsoft.Xna.Framework;`
+- `Rendering\SceneRenderer.cs:13` — `using Microsoft.Xna.Framework;`
+- `Rendering\SceneRenderer.cs:14` — `using Microsoft.Xna.Framework.Graphics;`
+- `Resources\CurrentMapState.cs:12` — `using Microsoft.Xna.Framework;`
+- `Resources\MapData.cs:14` — `using Microsoft.Xna.Framework.Graphics;`
+- `UserInterface\Gui.cs:9` — `using Microsoft.Xna.Framework;`
+- `UserInterface\Gui.cs:10` — `using Microsoft.Xna.Framework.Input;`
+- `UserInterface\ImGuiRenderer.cs:5` — `using Microsoft.Xna.Framework;`
+- `UserInterface\ImGuiRenderer.cs:6` — `using Microsoft.Xna.Framework.Graphics;`
+- `UserInterface\ImGuiRenderer.cs:7` — `using Microsoft.Xna.Framework.Input;`
+- `UserInterface\ImGuiRenderer.cs:12` — `/// ImGui renderer for use with XNA-likes (FNA & MonoGame)`
+- `UserInterface\ImGuiRenderer.cs:150` — `// MonoGame-specific //////////////////////`
+- `UserInterface\Selection.cs:14` — `using Microsoft.Xna.Framework;`
+- `UserInterface\GuiForms\GuiMenuBar.cs:430` — `Process.Start(new ProcessStartInfo {`
+- `UserInterface\GuiForms\GuiPanelMap.cs:9` — `using Microsoft.Xna.Framework;`
+- `UserInterface\GuiForms\GuiPanelMap.cs:305` — `directionalLights[0].Overflow = new Microsoft.Xna.Framework.Vector3(rOverflow, gOverflow, bOverflow);`
+- `UserInterface\GuiForms\GuiPanelMap.cs:380` — `directionalLights[1].Overflow = new Microsoft.Xna.Framework.Vector3(rOverflow, gOverflow, bOverflow);`
+- `UserInterface\GuiForms\GuiPanelMap.cs:455` — `directionalLights[2].Overflow = new Microsoft.Xna.Framework.Vector3(rOverflow, gOverflow, bOverflow);`
+- `UserInterface\GuiForms\GuiPanelPolygon.cs:9` — `using Microsoft.Xna.Framework;`
+- `UserInterface\GuiForms\GuiPanelPolygon.cs:307` — `polygon.Vertices[vertexIndex].Position = new Microsoft.Xna.Framework.Vector3(`
+- `UserInterface\GuiForms\GuiPanelPolygon.cs:322` — `polygon.Vertices[vertexIndex].Position = new Microsoft.Xna.Framework.Vector3(`
+- `UserInterface\GuiForms\GuiPanelPolygon.cs:338` — `polygon.Vertices[vertexIndex].Position = new Microsoft.Xna.Framework.Vector3(`
+- `UserInterface\GuiForms\GuiPanelPolygon.cs:577` — `selectedPolygon.UvCoordinates = new List<Microsoft.Xna.Framework.Vector2> {`
+- `UserInterface\GuiForms\GuiPanelPolygon.cs:584` — `selectedPolygon.UvCoordinates.Add(new Microsoft.Xna.Framework.Vector2(28, 28));`
+- `UserInterface\GuiForms\GuiPanelTexture.cs:12` — `using Microsoft.Xna.Framework;`
+- `UserInterface\GuiForms\GuiPanelTexture.cs:119` — `polygon.UvCoordinates[vertexIndex] = new Microsoft.Xna.Framework.Vector2(uPosition, vPosition);`
+- `UserInterface\GuiForms\GuiPanelTexture.cs:250` — `selectedPolygon.UvCoordinates[uvIndex] = new Microsoft.Xna.Framework.Vector2(`
+- `UserInterface\GuiForms\GuiPanelTexture.cs:266` — `selectedPolygon.UvCoordinates[uvIndex] = new Microsoft.Xna.Framework.Vector2(`
+- `UserInterface\GuiForms\GuiPanelTexture.cs:336` — `selectedPolygon.UvCoordinates[uvIndex] = new Microsoft.Xna.Framework.Vector2(`
+- `UserInterface\GuiForms\GuiPanelTexture.cs:352` — `private static Microsoft.Xna.Framework.Vector2 GetCenterOfUvSelection() {`
+- `UserInterface\GuiForms\GuiPanelTexture.cs:353` — `List<Microsoft.Xna.Framework.Vector2> points = new List<Microsoft.Xna.Framework.Vector2>();`
+- `UserInterface\GuiForms\GuiPanelTexture.cs:355` — `foreach (Microsoft.Xna.Framework.Vector2 uvVertex in selectedPolygon.UvCoordinates) {`
+- `UserInterface\GuiForms\GuiPanelTexture.cs:364` — `Microsoft.Xna.Framework.Vector2 center = GetCenterOfUvSelection();`
+- `UserInterface\GuiForms\GuiPanelTexture.cs:377` — `selectedPolygon.UvCoordinates[uvIndex] = new Microsoft.Xna.Framework.Vector2(newX, newY);`
+- `UserInterface\GuiForms\GuiWindowAddPolygon.cs:8` — `using Microsoft.Xna.Framework;`
+- `UserInterface\GuiForms\GuiWindowAddPolygon.cs:76` — `List<Microsoft.Xna.Framework.Vector2> uvs = _newPolygonIsTextured`
+- `UserInterface\GuiForms\GuiWindowAddPolygon.cs:77` — `? new List<Microsoft.Xna.Framework.Vector2> {`
+- `UserInterface\GuiForms\GuiWindowAddPolygon.cs:82` — `: new List<Microsoft.Xna.Framework.Vector2>();`
+- `UserInterface\GuiForms\GuiWindowManageResources.cs:16` — `using Microsoft.Xna.Framework;`
+- `UserInterface\GuiForms\GuiWindowRawTerrainData.cs:39` — `Process.Start(new ProcessStartInfo {`
+- `UserInterface\GuiForms\GuiWindowRawTerrainData.cs:59` — `if (ImGui.Button("Copy to Clipboard", new Vector2(columnTwo - 10, 20))) {`
+- `UserInterface\GuiForms\GuiWindowScreenshotBackgroundSelector.cs:6` — `using Microsoft.Xna.Framework;`
+- `UserInterface\GuiForms\GuiWindowTextureElement.cs:11` — `using Microsoft.Xna.Framework;`
+- `UserInterface\GuiForms\GuiWindowTextureElement.cs:12` — `using Microsoft.Xna.Framework.Graphics;`
+- `UserInterface\GuiForms\GuiWindowTextureElement.cs:13` — `using Microsoft.Xna.Framework.Input;`
+- `UserInterface\GuiForms\GuiWindowTexturePreview.cs:5` — `using Microsoft.Xna.Framework;`
+- `UserInterface\GuiForms\GuiWindowUpdateAvailable.cs:42` — `Process process = new();`
+- `UserInterface\GuiForms\GuiWindowUpdateAvailable.cs:43` — `process.StartInfo.FileName = UpdateChecker.InstallerFilePath;`
+- `UserInterface\GuiForms\GuiWindowUpdateAvailable.cs:44` — `process.Start();`
+- `UserInterface\Input\AppInput.cs:2` — `using Microsoft.Xna.Framework;`
+- `UserInterface\Input\AppInput.cs:3` — `using Microsoft.Xna.Framework.Input;`
+- `UserInterface\Input\AppShortcuts.cs:10` — `using Microsoft.Xna.Framework.Input;`
+- `UserInterface\Input\AppShortcuts.cs:201` — `Process.Start(new ProcessStartInfo {`
+- `UserInterface\Widgets\Compass.cs:6` — `using Microsoft.Xna.Framework;`
+- `UserInterface\Widgets\Compass.cs:7` — `using Microsoft.Xna.Framework.Graphics;`
+- `UserInterface\Widgets\DirectionalLightIndicator.cs:5` — `using Microsoft.Xna.Framework;`
+- `UserInterface\Widgets\DirectionalLightIndicator.cs:6` — `using Microsoft.Xna.Framework.Graphics;`
+- `UserInterface\Widgets\RotationWidgetAxis.cs:7` — `using Microsoft.Xna.Framework;`
+- `UserInterface\Widgets\RotationWidgetAxis.cs:8` — `using Microsoft.Xna.Framework.Graphics;`
+- `UserInterface\Widgets\TransformWidget.cs:6` — `using Microsoft.Xna.Framework;`
+- `UserInterface\Widgets\TransformWidgetAxis.cs:7` — `using Microsoft.Xna.Framework;`
+- `UserInterface\Widgets\TransformWidgetAxis.cs:8` — `using Microsoft.Xna.Framework.Graphics;`
+- `UserInterface\Widgets\VertexIndicator.cs:5` — `using Microsoft.Xna.Framework;`
+- `UserInterface\Widgets\VertexIndicator.cs:6` — `using Microsoft.Xna.Framework.Graphics;`
+- `UserInterface\Widgets\VertexIndicator.cs:7` — `using Vector2 = Microsoft.Xna.Framework.Vector2;`
+- `UserInterface\Widgets\VertexIndicator.cs:8` — `using Vector3 = Microsoft.Xna.Framework.Vector3;`
+- `Resources\ContentDataTypes\DirectionalLight.cs:1` — `ï»¿using Microsoft.Xna.Framework;`
+- `Resources\ContentDataTypes\MapStateData.cs:10` — `using Microsoft.Xna.Framework;`
+- `Resources\ContentDataTypes\MapStateData.cs:11` — `using Microsoft.Xna.Framework.Graphics;`
+- `Resources\ResourceContent\MeshResourceData.cs:10` — `using Microsoft.Xna.Framework;`
+- `Resources\ResourceContent\TextureResourceData.cs:5` — `using Microsoft.Xna.Framework;`
+- `Resources\ResourceContent\TextureResourceData.cs:6` — `using Microsoft.Xna.Framework.Graphics;`
+- `Resources\ContentDataTypes\Palettes\Palette.cs:3` — `using Microsoft.Xna.Framework;`
+- `Resources\ContentDataTypes\Palettes\PaletteColor.cs:3` — `using Microsoft.Xna.Framework;`
+- `Resources\ContentDataTypes\Polygons\Polygon.cs:9` — `using Microsoft.Xna.Framework;`
+- `Resources\ContentDataTypes\Polygons\Polygon.cs:10` — `using Microsoft.Xna.Framework.Graphics;`
+- `Resources\ContentDataTypes\Polygons\Vertex.cs:1` — `ï»¿using Microsoft.Xna.Framework;`
+- `Resources\ContentDataTypes\Terrains\TerrainTile.cs:6` — `using Microsoft.Xna.Framework;`
+- `Resources\ContentDataTypes\Terrains\TerrainTile.cs:7` — `using Microsoft.Xna.Framework.Graphics;`
