@@ -1,8 +1,11 @@
-# GaneshaDX
+# GaneshaDXW
 
 ## About
 
-GaneshaDX is a map editor for Final Fantasy Tactics for Playstation (PSX).
+GaneshaDXW is a browser-based migration of the map editor for Final Fantasy Tactics for Playstation (PSX), GaneshaDX, by Garmicchael. It now now leverages WebGPU rendering and a platform-agnostic accessibility for running on any system.
+
+- Screenshots an information below are from GaneshaDX -
+- Release coming soon! -
 
 ![Alt text](/Documentation/Screenshot_1.png?raw=true&ver=1 "Screenshot 1")
 
