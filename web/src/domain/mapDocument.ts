@@ -66,6 +66,22 @@ export function updateVertexPositionInDocument(
   return new InMemoryMeshDocumentStore(document).updateVertexPosition(vertexId, position).document;
 }
 
+export function updatePolygonInDocument(
+  document: MeshDocument,
+  polygonId: string,
+  updater: (polygon: MapPolygon) => MapPolygon,
+): MeshDocument {
+  return {
+    ...document,
+    sections: document.sections.map((section) => ({
+      ...section,
+      polygons: section.polygons.map((polygon) =>
+        polygon.id === polygonId ? updater(polygon) : polygon
+      ),
+    })),
+  };
+}
+
 export function nudgeVertexPosition(
   document: MeshDocument,
   vertexId: string,

@@ -2,6 +2,8 @@
 .idea/
 bin/
 obj/
+Content/bin/
+Content/obj/
 imgui.ini
 Preferences.json
 .vscode/
@@ -10,3 +12,13 @@ Releases/*
 node_modules/
 web/node_modules/
 web/dist/
+web/public/ganeshadxw.local.json
+web/public/reports/
+Final Fantasy Tactics (USA).bin
+Final Fantasy Tactics (USA).cue
+.DS_Store
+**/.DS_Store
+Web-Migration/MAP001.gmapx/
+docs-ganeshadx-research-complete/
+heretic/
+web/MAP-001-003/

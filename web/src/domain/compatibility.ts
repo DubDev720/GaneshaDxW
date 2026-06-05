@@ -4,6 +4,7 @@ export interface CompatibilityIssue {
   severity: "error" | "warning";
   code: string;
   message: string;
+  fieldPath?: string;
   polygonId?: string;
   vertexId?: string;
 }
@@ -37,6 +38,7 @@ export function sanitizeMeshDocumentForGaneshaDx(document: MeshDocument): {
         severity: "warning",
         code: "vertex.position.clamped",
         message: "Vertex position was clamped to signed 16-bit integer range.",
+        fieldPath: "vertex.ganeshaDxPosition",
         vertexId: vertex.id,
       });
     }
@@ -98,6 +100,7 @@ export function validateMeshDocumentForGaneshaDx(
           severity: "error",
           code: "polygon.uvCount.invalid",
           message: "Textured polygon UV count must match its vertex count.",
+          fieldPath: "texture.uvCoordinates",
           polygonId: polygon.id,
         });
       }
@@ -107,6 +110,7 @@ export function validateMeshDocumentForGaneshaDx(
           severity: "warning",
           code: "polygon.uv.untextured",
           message: "Untextured perimeter polygons should not carry UV data.",
+          fieldPath: "texture.uvCoordinates",
           polygonId: polygon.id,
         });
       }
@@ -118,6 +122,7 @@ export function validateMeshDocumentForGaneshaDx(
         "polygon.paletteId.range",
         "Palette IDs must stay in the original 0-15 range.",
         polygon.id,
+        "texture.paletteId",
       );
       validateRange(
         polygon.texturePage,
@@ -126,6 +131,7 @@ export function validateMeshDocumentForGaneshaDx(
         "polygon.texturePage.range",
         "Texture pages must stay in the original 0-3 atlas page range.",
         polygon.id,
+        "texture.texturePage",
       );
       validateRange(
         polygon.terrainBinding?.terrainX,
@@ -134,6 +140,7 @@ export function validateMeshDocumentForGaneshaDx(
         "polygon.terrainX.range",
         "Terrain X must stay in the original 0-255 range.",
         polygon.id,
+        "terrainBinding.terrainX",
       );
       validateRange(
         polygon.terrainBinding?.terrainZ,
@@ -142,6 +149,7 @@ export function validateMeshDocumentForGaneshaDx(
         "polygon.terrainZ.range",
         "Terrain Z must stay in the original 0-127 range.",
         polygon.id,
+        "terrainBinding.terrainZ",
       );
       validateRange(
         polygon.terrainBinding?.terrainLevel,
@@ -150,7 +158,29 @@ export function validateMeshDocumentForGaneshaDx(
         "polygon.terrainLevel.range",
         "Terrain level must stay in the original 0-1 range.",
         polygon.id,
+        "terrainBinding.terrainLevel",
       );
+
+      for (const [uvIndex, uv] of polygon.uv?.entries() ?? []) {
+        validateRange(
+          uv[0],
+          { min: 0, max: ganeshaDxCompatibility.textureAtlas.pageWidth - 1 },
+          issues,
+          "polygon.uv.u.range",
+          "UV U must stay in the original 0-255 page-local range.",
+          polygon.id,
+          `texture.uvCoordinates[${uvIndex}].u`,
+        );
+        validateRange(
+          uv[1],
+          { min: 0, max: ganeshaDxCompatibility.textureAtlas.pageHeight - 1 },
+          issues,
+          "polygon.uv.v.range",
+          "UV V must stay in the original 0-255 page-local range.",
+          polygon.id,
+          `texture.uvCoordinates[${uvIndex}].v`,
+        );
+      }
     }
   }
 
@@ -194,6 +224,7 @@ function sanitizePolygon(
       severity: "warning",
       code: "polygon.paletteId.clamped",
       message: "Palette ID was clamped to the original 0-15 range.",
+      fieldPath: "texture.paletteId",
       polygonId: polygon.id,
     });
   }
@@ -203,6 +234,49 @@ function sanitizePolygon(
       severity: "warning",
       code: "polygon.texturePage.clamped",
       message: "Texture page was clamped to the original 0-3 range.",
+      fieldPath: "texture.texturePage",
+      polygonId: polygon.id,
+    });
+  }
+
+  if (
+    terrainBinding &&
+    polygon.terrainBinding &&
+    terrainBinding.terrainX !== polygon.terrainBinding.terrainX
+  ) {
+    issues.push({
+      severity: "warning",
+      code: "polygon.terrainX.clamped",
+      message: "Terrain X was clamped to the original 0-255 range.",
+      fieldPath: "terrainBinding.terrainX",
+      polygonId: polygon.id,
+    });
+  }
+
+  if (
+    terrainBinding &&
+    polygon.terrainBinding &&
+    terrainBinding.terrainZ !== polygon.terrainBinding.terrainZ
+  ) {
+    issues.push({
+      severity: "warning",
+      code: "polygon.terrainZ.clamped",
+      message: "Terrain Z was clamped to the original 0-127 range.",
+      fieldPath: "terrainBinding.terrainZ",
+      polygonId: polygon.id,
+    });
+  }
+
+  if (
+    terrainBinding &&
+    polygon.terrainBinding &&
+    terrainBinding.terrainLevel !== polygon.terrainBinding.terrainLevel
+  ) {
+    issues.push({
+      severity: "warning",
+      code: "polygon.terrainLevel.clamped",
+      message: "Terrain level was clamped to the original 0-1 range.",
+      fieldPath: "terrainBinding.terrainLevel",
       polygonId: polygon.id,
     });
   }
@@ -238,6 +312,7 @@ function sanitizeUvs(
       severity: "warning",
       code: "polygon.uv.clamped",
       message: "UVs were clamped to the original 256x256 page-local byte range.",
+      fieldPath: "texture.uvCoordinates",
       polygonId: polygon.id,
     });
   }
@@ -252,6 +327,7 @@ function validateRange(
   code: string,
   message: string,
   polygonId: string,
+  fieldPath?: string,
 ): void {
   if (value === undefined) {
     return;
@@ -262,6 +338,7 @@ function validateRange(
       severity: "error",
       code,
       message,
+      fieldPath,
       polygonId,
     });
   }

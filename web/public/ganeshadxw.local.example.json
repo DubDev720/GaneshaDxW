@@ -1,0 +1,10 @@
+{
+  "consolidatedPackageRoot": "/reports/gmapx-consolidated",
+  "maps": [
+    {
+      "mapId": "MAP001",
+      "path": "MAP001",
+      "label": "MAP001 local consolidated fixture"
+    }
+  ]
+}

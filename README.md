@@ -82,6 +82,14 @@ gmapx-consolidated mesh.json
   -> triangulated GPU geometry
 ```
 
+Texture and palette resources flow beside the mesh document:
+
+```text
+palettes.master.json + base-textures.json + texture-mapping.json
+  -> TexturePaletteRegistry
+  -> palette-resolved Three.js materials
+```
+
 The renderer consumes the document. It does not own the map model.
 
 The original binary/lossless path remains separate:
@@ -98,6 +106,7 @@ This split lets the web editor stay practical while still respecting original-fo
 - `web/src/domain/mapDocument.ts` owns the editor document model.
 - `web/src/domain/editCommandHistory.ts` and `web/src/domain/selectionStore.ts` manage editor state.
 - `web/src/renderer/GaneshaThreeRendererAdapter.ts` consumes the document and builds renderable meshes.
+- `web/src/renderer/texturePaletteRegistry.ts` resolves indexed texture data through map palettes.
 
 
 ***
@@ -111,23 +120,61 @@ The active browser migration lives in [`web/`](web/).
 - Bun + Vite + TypeScript scaffold.
 - Uses **WebGPU first** and falls back to **WebGL2** when WebGPU is unavailable.
 - Renderer adapter boundary.
-- Consolidated JSON loader scaffold.
-- Loads `web/public/reports/gmapx-consolidated/MAP001/mesh.json` into a normalized `MeshDocument`.
+- Consolidated JSON package loader.
+- MAP001 import tooling for generated `gmapx-consolidated` reports.
+- Loads local, ignored `gmapx-consolidated` mesh packages through `web/public/ganeshadxw.local.json`.
+- Ships a safe empty package index by default so generated map meshes are not baked into source.
 - Falls back to a bundled TypeScript sample document if the JSON fixture cannot be loaded.
 - Source-format/provenance model.
 - Geometry builder for triangles and quads.
-- Material resolver with temporary visual materials.
+- GaneshaDX/GLB-verified triangle and quad winding for the current MAP001 render path.
+- Mostly one-sided mesh rendering by default, with double-sided rendering reserved for explicit future cases.
+- Atlas UV generation for textured polygons using source texture records.
+- Real indexed base texture loading from the consolidated package.
+- Palette master loading from the consolidated package.
+- Texture mapping loading from the consolidated package.
+- Texture/palette registry with material keys based on indexed texture and palette identity.
+- Palette-resolved texture materials using the current CPU-generated `DataTexture` path.
+- Transparent black-entry masking for source-compatible texture cutouts.
+- Texture upload conventions aligned with the verified MAP001 GLB reference.
+- UV chart/debug display mode with `U` hotkey.
 - Flat black untextured perimeter rendering.
 - GaneshaDX compatibility validation and sanitization for GaneshaDX-style limits for vertex ranges, UV ranges, palette IDs, texture pages, and terrain fields.
 - Document-driven scene tree.
+- Collapsible side-tabbed left and right panels.
+- Panels overlay the viewport so opening tools does not move the render area.
+- Camera reset, focus-selection, hardcoded perspective presets, and game-view toggle.
+- Perspective/orthographic projection toggle without changing camera location or rotation.
+- Right-click camera orbit and middle-click camera pan.
+- Zoom controls through buttons and `+`/`-` hotkeys.
+- Mouse-wheel zoom disabled to avoid accidental viewport changes.
+- Externalized viewport and camera tuning constants.
 - Polygon selection from UI.
 - Vertex selection from UI.
+- Face-first viewport picking, with near-corner vertex picking.
 - Canvas raycast polygon picking.
 - Near-vertex picking path.
+- Visible vertex handles in the viewport.
 - Per-vertex translation controls.
+- Drag-based vertex translation.
+- Keyboard nudging.
 - Undo/redo and reset-to-loaded-document edit history.
 - Modified `mesh.json` export/download.
 - Visible compatibility status panel.
+
+***
+
+## Local Map Data
+
+Generated map mesh payloads are runtime/test data, not source code.
+
+- `web/public/ganeshadxw.local.json` is intentionally ignored.
+- `web/public/ganeshadxw.local.example.json` documents the local config shape.
+- `web/public/reports/` is intentionally ignored.
+- Local dev can keep MAP001 or other generated packages under `web/public/reports/gmapx-consolidated/`.
+- Generated meshes, metadata, palette masters, base textures, texture mappings, and package indexes must not be committed.
+
+This lets contributors test against their own extracted/generated data without committing game-derived map meshes to the repository.
 
 ***
 
@@ -153,61 +200,45 @@ The web editor must stay compatible with constraints enforced by the original Ga
 
 ## What Remains
 
-**Core data and rendering:**
+**V1.0-critical:**
 
-- Replace the scaffold fixture with real generated `reports/gmapx-consolidated` data.
-- Implement `PaletteRegistry`.
-- Implement `TextureRegistry`.
-- Load `palettes.master.json`.
-- Load `base-textures.json`.
-- Load `texture-mapping.json`.
-- Load from GaneshaDX files.
-- Load from binary source.
-- Load and display `metadata.json`.
-- Implement real indexed texture upload.
-- Implement palette lookup shader.
-- Apply polygon `paletteId` in the shader.
-- Apply `texturePage` and page-local UV mapping correctly.
-- Add material keys based on texture and palette identity.
-- Preserve consolidated schema shape on export.
-- Lossless round-tripping or binary patching.
+- Add a map/package chooser instead of hardwiring the MAP001 package.
+- Display `metadata.json` and package health clearly in the UI.
+- Preserve the consolidated schema shape more completely on export, not only the normalized editable `mesh.json` surface.
+- Add a format-safe inspector for polygon texture page, palette, UV, terrain, visibility, and source-preserved fields.
+- Add field-level validation warnings tied to exact editable records.
+- Add a texture page preview tied to the selected face.
+- Add a focused UV editing workflow for selected triangles and quads.
+- Add a terrain binding editor for the visual mesh fields that map back to original game constraints.
+- Add `VariantResolver` support for base-state fallback relationships.
+- Add a variant selector once variant data is resolved into the active package model.
+- Add automated tests for compatibility limits, texture mapping, palette resolution, and export shape.
+- Add browser smoke tests and screenshot regression checks for renderer output.
+- Add release/build/deployment instructions.
 
-**Editor tools:**
+**V1.0 nice-to-have:**
 
-- Add visible vertex handles in the viewport.
-- Add drag-based vertex translation.
-- Add keyboard nudging.
 - Add polygon create/delete tools.
 - Add textured/untextured conversion.
-- Add triangle/quad conversion or split tools where safe.
-- Add UV editor.
-- Add texture page preview.
-- Add terrain binding editor.
-- Add render properties and invisibility flags editor.
-- Add unknown/source-preserved byte editor.
-- Add validation warnings tied to exact fields.
+- Add triangle/quad conversion or split tools where source compatibility allows it.
+- Add render properties and invisibility flags editing beyond the currently enforced validation guardrails.
+- Add an unknown/source-preserved byte editor for advanced compatibility work.
+- Add UV animation preview support.
+- Add palette animation preview support.
+- Add animated mesh section support.
+- Keep the tactical grid as a separate later layer.
+- Revisit the temporary GUI and decide whether to move to a richer editor-oriented UI framework.
 
-**Map systems:**
+**Deferred until after V1.0:**
 
-- Add `VariantResolver`.
-- Add variant selector.
-- Preserve base-state fallback relationships.
-- Add lighting/material layer.
-- Add UV animation support.
-- Add palette animation support.
-- Add animated mesh sections.
-- Keep tactical grid as a separate later layer.
-
-**Packaging and release:**
-
-- Add a map/package chooser.
-- Add project/session save behavior.
-- Add automated tests for compatibility limits.
-- Add browser smoke tests.
-- Add screenshot regression checks for renderer output.
-- Add build/release instructions.
-- Decide deployment target.
-- Decide long-term GUI framework.
+- Original `.GNS` or numbered-sidecar loading as a first-class import path.
+- Direct binary source loading from disc/archive data.
+- Lossless binary round-tripping or binary patching.
+- Modular mesh-set workflows based on the advanced mesh grouping tools already present in GaneshaDX.
+- A bridge between mesh editing and map building that makes reusable map construction accessible to less technical users.
+- Shader-native indexed texture sampling if it becomes more useful than the current verified palette-resolved texture path.
+- Lighting and baked-shadow shader parity with richer external viewers.
+- Dockable panels, command palette, plugin-style tools, scripting, and other next-level editor workflows.
 
 ***
 
@@ -221,53 +252,60 @@ The web editor must stay compatible with constraints enforced by the original Ga
 
 ### Phase 1 - Real Consolidated Data
 
-- Replace scaffold fixture with real `MAP001` consolidated output.
-- Prove loader compatibility against real mesh, texture, palette, and metadata files.
-- Keep unknown/source-preserved fields attached.
+- Generate real `MAP001` consolidated output.
+- Prove loader compatibility against real mesh, texture, palette, texture mapping, and metadata files.
+- Keep source/provenance fields attached where the current package model exposes them.
+- **Status:** implemented for the active MAP001 render baseline.
 
-### Phase 2 - Real Palette Rendering
+### Phase 2 - Verified Palette Rendering
 
-- Build `PaletteRegistry`.
-- Build `TextureRegistry`.
-- Upload indexed texture data.
-- Implement palette lookup shader path.
-- Render textured polygons through palette lookup instead of temporary colors.
+- Build palette and texture registries.
+- Upload indexed texture data through palette-resolved texture materials.
+- Match the source texture page, palette, alpha-mask, winding, and UV conventions against the verified MAP001 GLB reference.
+- Keep shader-native indexed sampling as an optimization/accuracy option, not a V1 blocker.
+- **Status:** implemented for MAP001 verification, with regression tests still needed.
 
 ### Phase 3 - Editor Usability
 
-- Add viewport vertex handles.
-- Add drag transforms.
-- Add keyboard controls.
-- Add command history for all edit operations.
-- Improve selection, hover, and inspector state.
+- Maintain the anchored viewport with overlay panels.
+- Keep camera movement, presets, focus, projection, zoom, and orbit behavior predictable.
+- Harden face/vertex picking, hover state, and selected-face vertex handling.
+- Extend command history to every new edit operation.
+- Build the selected-face texture/UV/terrain inspector.
+- **Status:** core viewport ergonomics are implemented; inspector workflows remain.
 
 ### Phase 4 - Format-Safe Editing
 
 - Export modified `mesh.json` in the consolidated schema shape.
 - Preserve raw/source/provenance fields.
 - Add validation for every editable field that maps back to original GaneshaDX/game constraints.
+- Add exact-field compatibility warnings before export.
+- Add targeted tests for every enforced original-format limit.
 
 ### Phase 5 - Variant and Material Systems
 
-- Add variant overlays.
+- Add variant overlays and selector.
 - Add fallback relationships.
-- Add lighting/material layer.
-- Add UV and palette animation support.
+- Add render properties and invisibility flag editing.
+- Add UV and palette animation preview support.
+- Keep lighting/material layers secondary to source-compatible texture correctness.
 
-### Phase 6 - Tooling and GUI Upgrade
+### Phase 6 - Packaging and Release
 
-- Decide whether to migrate the testing GUI to React, Solid, Svelte, or another editor-oriented UI stack.
-- Add dockable panels and reusable controls.
-- Add command palette and shortcuts.
-- Add richer editor workflows without coupling UI state to renderer state.
-
-### Phase 7 - Public Release
-
-- Package the web app.
-- Document supported workflows.
-- Include compatibility warnings.
+- Add package/session save behavior.
+- Add renderer screenshot regression checks.
+- Document supported workflows and known limits.
+- Decide the first deployment target.
 - Publish test maps and screenshots.
 - Invite FFHactics/GaneshaDX community testing before calling it stable.
+
+### Phase 7 - Post-1.0 Editor Growth
+
+- Revisit the temporary GUI architecture.
+- Add dockable panels and reusable advanced controls.
+- Add command palette and richer shortcuts.
+- Explore original binary import/export lanes.
+- Add larger editor workflows after the V1 compatibility baseline is stable.
 
 ***
 

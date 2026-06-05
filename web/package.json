@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "generate:render-resources": "bun scripts/generate-render-resources.ts",
+    "import:map": "bun scripts/import-consolidated-map.ts",
+    "import:map001": "bun scripts/import-consolidated-map.ts MAP001",
     "build": "tsc && vite build",
     "preview": "vite preview"
   },

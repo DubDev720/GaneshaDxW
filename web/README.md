@@ -33,6 +33,14 @@ gmapx-consolidated JSON -> normalized MeshDocument -> renderer adapter
 original GaneshaDX data  -> normalized MeshDocument -> renderer adapter
 ```
 
+## Local Map Data
+
+Generated map payloads should stay local. Put local package settings in
+`public/ganeshadxw.local.json` using `public/ganeshadxw.local.example.json` as
+the template. The whole `public/reports/` tree is ignored so the editor can load
+generated meshes, metadata, palettes, texture mappings, and base textures locally
+without shipping them in source.
+
 ## Commands
 
 ```bash
