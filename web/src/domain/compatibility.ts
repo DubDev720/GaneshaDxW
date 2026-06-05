@@ -5,6 +5,8 @@ export interface CompatibilityIssue {
   code: string;
   message: string;
   fieldPath?: string;
+  recordKind?: "document" | "polygon" | "vertex";
+  fieldKey?: string;
   polygonId?: string;
   vertexId?: string;
 }
@@ -38,7 +40,9 @@ export function sanitizeMeshDocumentForGaneshaDx(document: MeshDocument): {
         severity: "warning",
         code: "vertex.position.clamped",
         message: "Vertex position was clamped to signed 16-bit integer range.",
-        fieldPath: "vertex.ganeshaDxPosition",
+        fieldPath: `vertices.${vertex.id}.ganeshaDxPosition`,
+        recordKind: "vertex",
+        fieldKey: "ganeshaDxPosition",
         vertexId: vertex.id,
       });
     }
@@ -79,6 +83,9 @@ export function validateMeshDocumentForGaneshaDx(
           severity: "error",
           code: "polygon.vertexCount.invalid",
           message: "GaneshaDX polygons must be triangles or quads.",
+          recordKind: "polygon",
+          fieldKey: "vertexIds",
+          fieldPath: "vertexIds",
           polygonId: polygon.id,
         });
       }
@@ -89,6 +96,9 @@ export function validateMeshDocumentForGaneshaDx(
             severity: "error",
             code: "polygon.vertexRef.missing",
             message: "Polygon references a missing vertex.",
+            recordKind: "polygon",
+            fieldKey: "vertexIds",
+            fieldPath: "vertexIds",
             polygonId: polygon.id,
             vertexId,
           });
@@ -101,6 +111,8 @@ export function validateMeshDocumentForGaneshaDx(
           code: "polygon.uvCount.invalid",
           message: "Textured polygon UV count must match its vertex count.",
           fieldPath: "texture.uvCoordinates",
+          recordKind: "polygon",
+          fieldKey: "uv",
           polygonId: polygon.id,
         });
       }
@@ -111,6 +123,8 @@ export function validateMeshDocumentForGaneshaDx(
           code: "polygon.uv.untextured",
           message: "Untextured perimeter polygons should not carry UV data.",
           fieldPath: "texture.uvCoordinates",
+          recordKind: "polygon",
+          fieldKey: "uv",
           polygonId: polygon.id,
         });
       }
@@ -123,6 +137,7 @@ export function validateMeshDocumentForGaneshaDx(
         "Palette IDs must stay in the original 0-15 range.",
         polygon.id,
         "texture.paletteId",
+        "paletteId",
       );
       validateRange(
         polygon.texturePage,
@@ -132,6 +147,7 @@ export function validateMeshDocumentForGaneshaDx(
         "Texture pages must stay in the original 0-3 atlas page range.",
         polygon.id,
         "texture.texturePage",
+        "texturePage",
       );
       validateRange(
         polygon.terrainBinding?.terrainX,
@@ -141,6 +157,7 @@ export function validateMeshDocumentForGaneshaDx(
         "Terrain X must stay in the original 0-255 range.",
         polygon.id,
         "terrainBinding.terrainX",
+        "terrainX",
       );
       validateRange(
         polygon.terrainBinding?.terrainZ,
@@ -150,6 +167,7 @@ export function validateMeshDocumentForGaneshaDx(
         "Terrain Z must stay in the original 0-127 range.",
         polygon.id,
         "terrainBinding.terrainZ",
+        "terrainZ",
       );
       validateRange(
         polygon.terrainBinding?.terrainLevel,
@@ -159,6 +177,7 @@ export function validateMeshDocumentForGaneshaDx(
         "Terrain level must stay in the original 0-1 range.",
         polygon.id,
         "terrainBinding.terrainLevel",
+        "terrainLevel",
       );
 
       for (const [uvIndex, uv] of polygon.uv?.entries() ?? []) {
@@ -170,6 +189,7 @@ export function validateMeshDocumentForGaneshaDx(
           "UV U must stay in the original 0-255 page-local range.",
           polygon.id,
           `texture.uvCoordinates[${uvIndex}].u`,
+          `uv:${uvIndex}:u`,
         );
         validateRange(
           uv[1],
@@ -179,6 +199,7 @@ export function validateMeshDocumentForGaneshaDx(
           "UV V must stay in the original 0-255 page-local range.",
           polygon.id,
           `texture.uvCoordinates[${uvIndex}].v`,
+          `uv:${uvIndex}:v`,
         );
       }
     }
@@ -225,6 +246,8 @@ function sanitizePolygon(
       code: "polygon.paletteId.clamped",
       message: "Palette ID was clamped to the original 0-15 range.",
       fieldPath: "texture.paletteId",
+      recordKind: "polygon",
+      fieldKey: "paletteId",
       polygonId: polygon.id,
     });
   }
@@ -235,6 +258,8 @@ function sanitizePolygon(
       code: "polygon.texturePage.clamped",
       message: "Texture page was clamped to the original 0-3 range.",
       fieldPath: "texture.texturePage",
+      recordKind: "polygon",
+      fieldKey: "texturePage",
       polygonId: polygon.id,
     });
   }
@@ -249,6 +274,8 @@ function sanitizePolygon(
       code: "polygon.terrainX.clamped",
       message: "Terrain X was clamped to the original 0-255 range.",
       fieldPath: "terrainBinding.terrainX",
+      recordKind: "polygon",
+      fieldKey: "terrainX",
       polygonId: polygon.id,
     });
   }
@@ -263,6 +290,8 @@ function sanitizePolygon(
       code: "polygon.terrainZ.clamped",
       message: "Terrain Z was clamped to the original 0-127 range.",
       fieldPath: "terrainBinding.terrainZ",
+      recordKind: "polygon",
+      fieldKey: "terrainZ",
       polygonId: polygon.id,
     });
   }
@@ -277,6 +306,8 @@ function sanitizePolygon(
       code: "polygon.terrainLevel.clamped",
       message: "Terrain level was clamped to the original 0-1 range.",
       fieldPath: "terrainBinding.terrainLevel",
+      recordKind: "polygon",
+      fieldKey: "terrainLevel",
       polygonId: polygon.id,
     });
   }
@@ -313,6 +344,8 @@ function sanitizeUvs(
       code: "polygon.uv.clamped",
       message: "UVs were clamped to the original 256x256 page-local byte range.",
       fieldPath: "texture.uvCoordinates",
+      recordKind: "polygon",
+      fieldKey: "uv",
       polygonId: polygon.id,
     });
   }
@@ -328,6 +361,7 @@ function validateRange(
   message: string,
   polygonId: string,
   fieldPath?: string,
+  fieldKey?: string,
 ): void {
   if (value === undefined) {
     return;
@@ -339,6 +373,8 @@ function validateRange(
       code,
       message,
       fieldPath,
+      recordKind: "polygon",
+      fieldKey,
       polygonId,
     });
   }

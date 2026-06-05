@@ -1378,18 +1378,18 @@ function renderFaceInspector(document: MeshDocument): void {
     </div>
     <div class="control-group">
       <h2>Texture</h2>
-      ${renderTextureFields(polygon)}
+      ${renderTextureFields(polygon, polygonIssues)}
     </div>
     <div class="control-group">
       <h2>UV Coordinates</h2>
-      ${renderUvFields(polygon)}
+      ${renderUvFields(polygon, polygonIssues)}
     </div>
     <div class="control-group">
       <h2>Terrain Binding</h2>
       <div class="field-grid">
-        ${renderNumberField("X", "terrainX", terrain.terrainX, 0, 255)}
-        ${renderNumberField("Z", "terrainZ", terrain.terrainZ, 0, 127)}
-        ${renderNumberField("Level", "terrainLevel", terrain.terrainLevel, 0, 1)}
+        ${renderNumberField("X", "terrainX", terrain.terrainX, 0, 255, polygonIssues)}
+        ${renderNumberField("Z", "terrainZ", terrain.terrainZ, 0, 127, polygonIssues)}
+        ${renderNumberField("Level", "terrainLevel", terrain.terrainLevel, 0, 1, polygonIssues)}
       </div>
     </div>
     <div class="control-group">
@@ -1426,20 +1426,26 @@ function renderPolygonIssues(issues: readonly CompatibilityIssue[]): string {
   `;
 }
 
-function renderTextureFields(polygon: MapPolygon): string {
+function renderTextureFields(
+  polygon: MapPolygon,
+  issues: readonly CompatibilityIssue[],
+): string {
   if (!polygon.isTextured) {
     return `<p class="empty-state">This face is untextured.</p>`;
   }
 
   return `
     <div class="field-grid">
-      ${renderNumberField("Page", "texturePage", polygon.texturePage ?? 0, 0, 3)}
-      ${renderNumberField("Palette", "paletteId", polygon.paletteId ?? 0, 0, 15)}
+      ${renderNumberField("Page", "texturePage", polygon.texturePage ?? 0, 0, 3, issues)}
+      ${renderNumberField("Palette", "paletteId", polygon.paletteId ?? 0, 0, 15, issues)}
     </div>
   `;
 }
 
-function renderUvFields(polygon: MapPolygon): string {
+function renderUvFields(
+  polygon: MapPolygon,
+  issues: readonly CompatibilityIssue[],
+): string {
   if (!polygon.isTextured) {
     return `<p class="empty-state">Untextured faces do not carry UV data.</p>`;
   }
@@ -1451,8 +1457,8 @@ function renderUvFields(polygon: MapPolygon): string {
           (uv, index) => `
             <div class="uv-row">
               <span>${String.fromCharCode(65 + index)}</span>
-              ${renderNumberField("U", `uv:${index}:u`, uv[0], 0, 255)}
-              ${renderNumberField("V", `uv:${index}:v`, uv[1], 0, 255)}
+              ${renderNumberField("U", `uv:${index}:u`, uv[0], 0, 255, issues)}
+              ${renderNumberField("V", `uv:${index}:v`, uv[1], 0, 255, issues)}
             </div>
           `,
         )
@@ -1488,9 +1494,12 @@ function renderNumberField(
   value: number,
   min: number,
   max: number,
+  issues: readonly CompatibilityIssue[] = [],
 ): string {
+  const issue = issueForField(issues, field);
+  const validity = issue ? issue.severity : "ok";
   return `
-    <label class="number-field">
+    <label class="number-field" data-field-validity="${escapeHtml(validity)}">
       <span>${escapeHtml(label)}</span>
       <input
         data-polygon-field="${escapeHtml(field)}"
@@ -1500,8 +1509,16 @@ function renderNumberField(
         step="1"
         value="${Number.isFinite(value) ? value : min}"
       >
+      ${issue ? `<em>${escapeHtml(issue.message)}</em>` : ""}
     </label>
   `;
+}
+
+function issueForField(
+  issues: readonly CompatibilityIssue[],
+  field: string,
+): CompatibilityIssue | undefined {
+  return issues.find((issue) => issue.fieldKey === field);
 }
 
 function updateSelectedPolygonField(
@@ -1516,8 +1533,7 @@ function updateSelectedPolygonField(
   const nextDocument = updatePolygonInDocument(history.state, polygonId, (polygon) =>
     updatePolygonField(polygon, field, target),
   );
-  const sanitized = sanitizeMeshDocumentForGaneshaDx(nextDocument);
-  history.execute(sanitized.document, { kind: "polygon", polygonId });
+  history.execute(nextDocument, { kind: "polygon", polygonId });
   selectionStore.selectPolygon(polygonId);
   renderChangedPolygon(polygonId);
 }
@@ -1822,10 +1838,25 @@ function updateCompatibilityStatus(issues: readonly CompatibilityIssue[]): void 
   compatibilityStatusText.textContent =
     errors.length === 0 && warnings.length === 0
       ? "All loaded values fit original GaneshaDX limits"
-      : `${errors.length} errors, ${warnings.length} clamped warnings`;
+      : `${errors.length} errors, ${warnings.length} warnings`;
 }
 
 function exportMeshDocument(document: MeshDocument): void {
+  const issues = validateMeshDocumentForGaneshaDx(document);
+  const errors = issues.filter((issue) => issue.severity === "error");
+  if (errors.length > 0) {
+    if (errors[0]?.polygonId) {
+      selectionStore.selectPolygon(errors[0].polygonId);
+      selectionStore.selectVertex(null);
+      activeRightTab = "face";
+      syncPanelTabs();
+    }
+    renderDocumentUi();
+    compatibilityStatusText.textContent =
+      `Export blocked: ${errors.length} field ${errors.length === 1 ? "error" : "errors"} must be fixed.`;
+    return;
+  }
+
   const exportPayload = activeLoadedPackage?.rawMeshJson
     ? exportConsolidatedMeshJson(activeLoadedPackage.rawMeshJson, document)
     : document;

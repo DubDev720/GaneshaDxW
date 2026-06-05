@@ -5,7 +5,14 @@ import type {
   PackageHealth,
   PackageHealthCheck,
 } from "../domain/sourceFormat";
-import type { MapPolygon, MapVertex, MeshDocument, Vec2, Vec3 } from "../domain/mapDocument";
+import type {
+  MapPolygon,
+  MapVertex,
+  MeshDocument,
+  PolygonBucketName,
+  Vec2,
+  Vec3,
+} from "../domain/mapDocument";
 import type {
   BaseTexturesJson,
   PaletteMasterJson,
@@ -301,25 +308,37 @@ export class BrowserMapPackageLoader implements MapPackageLoader {
       const sectionId = meshSection.id ?? meshSection.meshType ?? `mesh-section-${sectionIndex}`;
       const polygons = [
         ...this.normalizePolygonList(
+          "consolidatedMeshJson",
           sectionId,
+          sectionIndex,
+          "texturedTriangles",
           "textured-triangle",
           meshSection.texturedTriangles,
           verticesById,
         ),
         ...this.normalizePolygonList(
+          "consolidatedMeshJson",
           sectionId,
+          sectionIndex,
+          "texturedQuads",
           "textured-quad",
           meshSection.texturedQuads,
           verticesById,
         ),
         ...this.normalizePolygonList(
+          "consolidatedMeshJson",
           sectionId,
+          sectionIndex,
+          "untexturedTriangles",
           "untextured-triangle",
           meshSection.untexturedTriangles,
           verticesById,
         ),
         ...this.normalizePolygonList(
+          "consolidatedMeshJson",
           sectionId,
+          sectionIndex,
+          "untexturedQuads",
           "untextured-quad",
           meshSection.untexturedQuads,
           verticesById,
@@ -361,9 +380,13 @@ export class BrowserMapPackageLoader implements MapPackageLoader {
 
   private normalizeEditableMeshJson(mesh: EditableMeshJson): MeshDocument {
     const meshUse = mesh.meshUses?.[0];
+    const meshUseIndex = meshUse ? mesh.meshUses?.indexOf(meshUse) ?? 0 : undefined;
     const meshDefinition = mesh.meshDefinitions?.find(
       (definition) => definition.meshRef === meshUse?.meshRef,
     ) ?? mesh.meshDefinitions?.[0];
+    const meshDefinitionIndex = meshDefinition
+      ? mesh.meshDefinitions?.indexOf(meshDefinition) ?? 0
+      : undefined;
     const meshData = meshDefinition?.data;
     const verticesById = new Map<string, MapVertex>();
 
@@ -382,36 +405,56 @@ export class BrowserMapPackageLoader implements MapPackageLoader {
       : "Primary";
     const polygons = [
       ...this.normalizePolygonList(
+        "editableMeshJson",
         sectionId,
+        0,
+        "texturedTriangles",
         "textured-triangle",
         meshData.texturedTriangles,
         verticesById,
         meshUse,
         meshDefinition,
+        meshUseIndex,
+        meshDefinitionIndex,
       ),
       ...this.normalizePolygonList(
+        "editableMeshJson",
         sectionId,
+        0,
+        "texturedQuads",
         "textured-quad",
         meshData.texturedQuads,
         verticesById,
         meshUse,
         meshDefinition,
+        meshUseIndex,
+        meshDefinitionIndex,
       ),
       ...this.normalizePolygonList(
+        "editableMeshJson",
         sectionId,
+        0,
+        "untexturedTriangles",
         "untextured-triangle",
         meshData.untexturedTriangles,
         verticesById,
         meshUse,
         meshDefinition,
+        meshUseIndex,
+        meshDefinitionIndex,
       ),
       ...this.normalizePolygonList(
+        "editableMeshJson",
         sectionId,
+        0,
+        "untexturedQuads",
         "untextured-quad",
         meshData.untexturedQuads,
         verticesById,
         meshUse,
         meshDefinition,
+        meshUseIndex,
+        meshDefinitionIndex,
       ),
     ];
 
@@ -430,15 +473,21 @@ export class BrowserMapPackageLoader implements MapPackageLoader {
   }
 
   private normalizePolygonList(
+    schema: "editableMeshJson" | "consolidatedMeshJson",
     sectionId: string,
+    sectionIndex: number,
+    bucketName: PolygonBucketName,
     polygonClass: string,
     polygons: readonly ConsolidatedPolygon[] = [],
     verticesById: Map<string, MapVertex>,
     meshUse?: EditableMeshUse,
     meshDefinition?: EditableMeshDefinition,
+    meshUseIndex?: number,
+    meshDefinitionIndex?: number,
   ): MapPolygon[] {
     return polygons.map((polygon, polygonIndex) => {
       const isTextured = Boolean(polygon.isTextured ?? polygon.texture);
+      const sourcePolygonIndex = polygon.polygonIndex ?? polygonIndex;
       const vertexIds = (polygon.vertices ?? []).map((vertex, vertexIndex) => {
         const vertexId = this.vertexId(
           sectionId,
@@ -459,8 +508,20 @@ export class BrowserMapPackageLoader implements MapPackageLoader {
       });
 
       return {
-        id: `${sectionId}-${polygonClass}-${polygon.polygonIndex ?? polygonIndex}`,
+        id: `${sectionId}-${polygonClass}-${sourcePolygonIndex}`,
         sectionId,
+        source: {
+          schema,
+          sectionId,
+          sectionIndex,
+          meshRef: meshDefinition?.meshRef,
+          meshDefinitionIndex,
+          meshUseIndex,
+          bucketName,
+          polygonClass,
+          polygonIndex: sourcePolygonIndex,
+          bucketIndex: polygonIndex,
+        },
         vertexIds,
         uv: isTextured ? this.normalizeUvs(polygon.texture) : undefined,
         texturePage: polygon.texture?.texturePage,

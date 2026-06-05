@@ -6,16 +6,17 @@ It is intentionally smaller than the full generated `docs/` tree. The goal is fa
 
 ## Recommended Reading Order
 
-1. `format-reference/10-consolidated-modern-export.md`
-2. `format-reference/06-reconstruction-checklist.md`
-3. `format-reference/03-mesh-geometry.md`
-4. `format-reference/04-textures-palettes.md`
-5. `format-reference/08-variant-overlays.md`
-6. `architecture/50-source-level-pipeline-review.md`
-7. `source-profiles/Resources__ResourceContent__MeshResourceData.md`
-8. `source-profiles/Resources__ContentDataTypes__Polygons__Polygon.md`
-9. `source-profiles/Rendering__SceneRenderer.md`
-10. `diagrams/source-level-map-pipeline.mmd`
+1. `V1-MIGRATION-SCOPE.md`
+2. `format-reference/10-consolidated-modern-export.md`
+3. `format-reference/06-reconstruction-checklist.md`
+4. `format-reference/03-mesh-geometry.md`
+5. `format-reference/04-textures-palettes.md`
+6. `format-reference/08-variant-overlays.md`
+7. `architecture/50-source-level-pipeline-review.md`
+8. `source-profiles/Resources__ResourceContent__MeshResourceData.md`
+9. `source-profiles/Resources__ContentDataTypes__Polygons__Polygon.md`
+10. `source-profiles/Rendering__SceneRenderer.md`
+11. `diagrams/source-level-map-pipeline.mmd`
 
 ## Fast Web Migration Target
 

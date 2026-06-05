@@ -2,6 +2,8 @@
 
 The fastest useful V1 is a web editor that loads the consolidated JSON, renders the editable visual mesh, and supports selection plus per-vertex editing.
 
+For the current release contract, read `V1-MIGRATION-SCOPE.md` first. It separates the targeted V1 migration list from the broader GaneshaDX feature-parity checklist.
+
 ## V1 Data Inputs
 
 Use:

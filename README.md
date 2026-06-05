@@ -200,45 +200,19 @@ The web editor must stay compatible with constraints enforced by the original Ga
 
 ## What Remains
 
-**V1.0-critical:**
+The detailed scope is now tracked in [`Web-Migration/V1-MIGRATION-SCOPE.md`](Web-Migration/V1-MIGRATION-SCOPE.md).
 
-- Add a map/package chooser instead of hardwiring the MAP001 package.
-- Display `metadata.json` and package health clearly in the UI.
-- Preserve the consolidated schema shape more completely on export, not only the normalized editable `mesh.json` surface.
-- Add a format-safe inspector for polygon texture page, palette, UV, terrain, visibility, and source-preserved fields.
-- Add field-level validation warnings tied to exact editable records.
-- Add a texture page preview tied to the selected face.
-- Add a focused UV editing workflow for selected triangles and quads.
-- Add a terrain binding editor for the visual mesh fields that map back to original game constraints.
-- Add `VariantResolver` support for base-state fallback relationships.
-- Add a variant selector once variant data is resolved into the active package model.
-- Add automated tests for compatibility limits, texture mapping, palette resolution, and export shape.
-- Add browser smoke tests and screenshot regression checks for renderer output.
-- Add release/build/deployment instructions.
+**V1.0 target:**
 
-**V1.0 nice-to-have:**
+- Local generated package loading without tracking generated map resources.
+- Accurate visual mesh rendering with source-compatible texture, palette, UV, and alpha behavior.
+- Face, vertex, UV, and terrain-binding editing for the visual mesh.
+- Format-safe inspectors and field-level validation for editable source-backed records.
+- Consolidated-schema export that preserves source/provenance fields.
+- Undo/redo coverage for every V1 edit operation.
+- Browser smoke tests and release documentation for the supported V1 workflow.
 
-- Add polygon create/delete tools.
-- Add textured/untextured conversion.
-- Add triangle/quad conversion or split tools where source compatibility allows it.
-- Add render properties and invisibility flags editing beyond the currently enforced validation guardrails.
-- Add an unknown/source-preserved byte editor for advanced compatibility work.
-- Add UV animation preview support.
-- Add palette animation preview support.
-- Add animated mesh section support.
-- Keep the tactical grid as a separate later layer.
-- Revisit the temporary GUI and decide whether to move to a richer editor-oriented UI framework.
-
-**Deferred until after V1.0:**
-
-- Original `.GNS` or numbered-sidecar loading as a first-class import path.
-- Direct binary source loading from disc/archive data.
-- Lossless binary round-tripping or binary patching.
-- Modular mesh-set workflows based on the advanced mesh grouping tools already present in GaneshaDX.
-- A bridge between mesh editing and map building that makes reusable map construction accessible to less technical users.
-- Shader-native indexed texture sampling if it becomes more useful than the current verified palette-resolved texture path.
-- Lighting and baked-shadow shader parity with richer external viewers.
-- Dockable panels, command palette, plugin-style tools, scripting, and other next-level editor workflows.
+**Full GaneshaDX parity remains a long-term checklist, not the V1 definition.**
 
 ***
 

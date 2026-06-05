@@ -1,7 +1,14 @@
-import type { MapPolygon, MeshDocument, Vec2, Vec3 } from "./mapDocument";
+import type {
+  MapPolygon,
+  MeshDocument,
+  PolygonBucketName,
+  Vec2,
+  Vec3,
+} from "./mapDocument";
 
 interface EditableMeshJson {
   mapId?: string;
+  meshes?: EditableMeshSection[];
   meshDefinitions?: EditableMeshDefinition[];
   meshUses?: unknown[];
   editModel?: Record<string, unknown>;
@@ -13,6 +20,7 @@ interface EditableMeshDefinition {
 }
 
 interface EditableMeshSection {
+  id?: string;
   meshType?: string;
   texturedTriangles?: EditablePolygon[];
   texturedQuads?: EditablePolygon[];
@@ -62,6 +70,11 @@ interface EditableTerrainBinding {
   packedTerrainZAndLevel?: number;
 }
 
+interface PolygonLookup {
+  byId: ReadonlyMap<string, MapPolygon>;
+  bySource: ReadonlyMap<string, MapPolygon>;
+}
+
 export function exportConsolidatedMeshJson(
   rawMeshJson: unknown,
   document: MeshDocument,
@@ -71,49 +84,10 @@ export function exportConsolidatedMeshJson(
   }
 
   const exported = structuredClone(rawMeshJson) as EditableMeshJson;
-  const polygonsById = new Map<string, MapPolygon>();
-  for (const section of document.sections) {
-    for (const polygon of section.polygons) {
-      polygonsById.set(polygon.id, polygon);
-    }
-  }
+  const lookup = buildPolygonLookup(document);
 
-  for (const meshDefinition of exported.meshDefinitions ?? []) {
-    const section = meshDefinition.data;
-    if (!section) {
-      continue;
-    }
-
-    const sectionId = meshDefinition.meshRef ?? section.meshType ?? "primary-mesh";
-    patchPolygonBucket(
-      sectionId,
-      "textured-triangle",
-      section.texturedTriangles,
-      polygonsById,
-      document,
-    );
-    patchPolygonBucket(
-      sectionId,
-      "textured-quad",
-      section.texturedQuads,
-      polygonsById,
-      document,
-    );
-    patchPolygonBucket(
-      sectionId,
-      "untextured-triangle",
-      section.untexturedTriangles,
-      polygonsById,
-      document,
-    );
-    patchPolygonBucket(
-      sectionId,
-      "untextured-quad",
-      section.untexturedQuads,
-      polygonsById,
-      document,
-    );
-  }
+  patchMeshDefinitions(exported, lookup, document);
+  patchMeshSections(exported.meshes, "consolidatedMeshJson", lookup, document);
 
   exported.editModel = {
     ...(exported.editModel ?? {}),
@@ -124,25 +98,222 @@ export function exportConsolidatedMeshJson(
   return exported;
 }
 
-function patchPolygonBucket(
-  sectionId: string,
-  polygonClass: string,
-  bucket: EditablePolygon[] | undefined,
-  polygonsById: ReadonlyMap<string, MapPolygon>,
+function patchMeshDefinitions(
+  exported: EditableMeshJson,
+  lookup: PolygonLookup,
   document: MeshDocument,
 ): void {
-  for (const [bucketIndex, rawPolygon] of bucket?.entries() ?? []) {
-    const polygonId = `${sectionId}-${polygonClass}-${rawPolygon.polygonIndex ?? bucketIndex}`;
-    const polygon = polygonsById.get(polygonId);
+  for (const [meshDefinitionIndex, meshDefinition] of (exported.meshDefinitions ?? []).entries()) {
+    const section = meshDefinition.data;
+    if (!section) {
+      continue;
+    }
+
+    patchPolygonBucket({
+      bucketName: "texturedTriangles",
+      bucket: section.texturedTriangles,
+      schema: "editableMeshJson",
+      sectionId: meshDefinition.meshRef ?? section.id ?? section.meshType ?? "primary-mesh",
+      sectionIndex: 0,
+      meshDefinitionIndex,
+      lookup,
+      document,
+    });
+    patchPolygonBucket({
+      bucketName: "texturedQuads",
+      bucket: section.texturedQuads,
+      schema: "editableMeshJson",
+      sectionId: meshDefinition.meshRef ?? section.id ?? section.meshType ?? "primary-mesh",
+      sectionIndex: 0,
+      meshDefinitionIndex,
+      lookup,
+      document,
+    });
+    patchPolygonBucket({
+      bucketName: "untexturedTriangles",
+      bucket: section.untexturedTriangles,
+      schema: "editableMeshJson",
+      sectionId: meshDefinition.meshRef ?? section.id ?? section.meshType ?? "primary-mesh",
+      sectionIndex: 0,
+      meshDefinitionIndex,
+      lookup,
+      document,
+    });
+    patchPolygonBucket({
+      bucketName: "untexturedQuads",
+      bucket: section.untexturedQuads,
+      schema: "editableMeshJson",
+      sectionId: meshDefinition.meshRef ?? section.id ?? section.meshType ?? "primary-mesh",
+      sectionIndex: 0,
+      meshDefinitionIndex,
+      lookup,
+      document,
+    });
+  }
+}
+
+function patchMeshSections(
+  sections: EditableMeshSection[] | undefined,
+  schema: "editableMeshJson" | "consolidatedMeshJson",
+  lookup: PolygonLookup,
+  document: MeshDocument,
+): void {
+  for (const [sectionIndex, section] of (sections ?? []).entries()) {
+    const sectionId = section.id ?? section.meshType ?? `mesh-section-${sectionIndex}`;
+    patchPolygonBucket({
+      bucketName: "texturedTriangles",
+      bucket: section.texturedTriangles,
+      schema,
+      sectionId,
+      sectionIndex,
+      lookup,
+      document,
+    });
+    patchPolygonBucket({
+      bucketName: "texturedQuads",
+      bucket: section.texturedQuads,
+      schema,
+      sectionId,
+      sectionIndex,
+      lookup,
+      document,
+    });
+    patchPolygonBucket({
+      bucketName: "untexturedTriangles",
+      bucket: section.untexturedTriangles,
+      schema,
+      sectionId,
+      sectionIndex,
+      lookup,
+      document,
+    });
+    patchPolygonBucket({
+      bucketName: "untexturedQuads",
+      bucket: section.untexturedQuads,
+      schema,
+      sectionId,
+      sectionIndex,
+      lookup,
+      document,
+    });
+  }
+}
+
+function patchPolygonBucket(args: {
+  bucketName: PolygonBucketName;
+  bucket: EditablePolygon[] | undefined;
+  schema: "editableMeshJson" | "consolidatedMeshJson";
+  sectionId: string;
+  sectionIndex: number;
+  meshDefinitionIndex?: number;
+  lookup: PolygonLookup;
+  document: MeshDocument;
+}): void {
+  for (const [bucketIndex, rawPolygon] of (args.bucket ?? []).entries()) {
+    const polygon = findSourcePolygon(args, rawPolygon, bucketIndex);
     if (!polygon) {
       continue;
     }
 
-    patchVertices(rawPolygon, polygon, document);
+    patchVertices(rawPolygon, polygon, args.document);
     patchTexture(rawPolygon, polygon);
     patchTerrain(rawPolygon, polygon);
     patchRenderingProperties(rawPolygon, polygon);
   }
+}
+
+function findSourcePolygon(
+  args: {
+    bucketName: PolygonBucketName;
+    schema: "editableMeshJson" | "consolidatedMeshJson";
+    sectionId: string;
+    sectionIndex: number;
+    meshDefinitionIndex?: number;
+    lookup: PolygonLookup;
+  },
+  rawPolygon: EditablePolygon,
+  bucketIndex: number,
+): MapPolygon | undefined {
+  const polygonIndex = rawPolygon.polygonIndex ?? bucketIndex;
+  const sourceCandidates = [
+    sourceKey({
+      schema: args.schema,
+      sectionId: args.sectionId,
+      sectionIndex: args.sectionIndex,
+      meshDefinitionIndex: args.meshDefinitionIndex,
+      bucketName: args.bucketName,
+      polygonIndex,
+      bucketIndex,
+    }),
+    sourceKey({
+      schema: args.schema,
+      sectionId: args.sectionId,
+      sectionIndex: args.sectionIndex,
+      bucketName: args.bucketName,
+      polygonIndex,
+      bucketIndex,
+    }),
+  ];
+
+  for (const candidate of sourceCandidates) {
+    const polygon = args.lookup.bySource.get(candidate);
+    if (polygon) {
+      return polygon;
+    }
+  }
+
+  return args.lookup.byId.get(
+    `${args.sectionId}-${polygonClassForBucket(args.bucketName)}-${polygonIndex}`,
+  );
+}
+
+function buildPolygonLookup(document: MeshDocument): PolygonLookup {
+  const byId = new Map<string, MapPolygon>();
+  const bySource = new Map<string, MapPolygon>();
+  for (const section of document.sections) {
+    for (const polygon of section.polygons) {
+      byId.set(polygon.id, polygon);
+      if (polygon.source) {
+        bySource.set(sourceKey(polygon.source), polygon);
+        bySource.set(sourceKey({ ...polygon.source, meshDefinitionIndex: undefined }), polygon);
+      }
+    }
+  }
+
+  return { byId, bySource };
+}
+
+function sourceKey(source: {
+  schema: "editableMeshJson" | "consolidatedMeshJson";
+  sectionId: string;
+  sectionIndex?: number;
+  meshDefinitionIndex?: number;
+  bucketName: PolygonBucketName;
+  polygonIndex: number;
+  bucketIndex: number;
+}): string {
+  return [
+    source.schema,
+    source.sectionId,
+    source.sectionIndex ?? "",
+    source.meshDefinitionIndex ?? "",
+    source.bucketName,
+    source.polygonIndex,
+    source.bucketIndex,
+  ].join("|");
+}
+
+function polygonClassForBucket(bucketName: PolygonBucketName): string {
+  if (bucketName === "texturedTriangles") {
+    return "textured-triangle";
+  }
+  if (bucketName === "texturedQuads") {
+    return "textured-quad";
+  }
+  if (bucketName === "untexturedTriangles") {
+    return "untextured-triangle";
+  }
+  return "untextured-quad";
 }
 
 function patchVertices(
@@ -150,7 +321,7 @@ function patchVertices(
   polygon: MapPolygon,
   document: MeshDocument,
 ): void {
-  for (const [vertexIndex, rawVertex] of rawPolygon.vertices?.entries() ?? []) {
+  for (const [vertexIndex, rawVertex] of (rawPolygon.vertices ?? []).entries()) {
     const vertexId = polygon.vertexIds[vertexIndex];
     const vertex = document.vertices.find((candidate) => candidate.id === vertexId);
     if (!vertex) {
@@ -243,7 +414,7 @@ function isEditableMeshJson(value: unknown): value is EditableMeshJson {
   return (
     typeof value === "object" &&
     value !== null &&
-    "meshDefinitions" in value &&
-    Array.isArray((value as { meshDefinitions?: unknown }).meshDefinitions)
+    (("meshDefinitions" in value && Array.isArray((value as EditableMeshJson).meshDefinitions)) ||
+      ("meshes" in value && Array.isArray((value as EditableMeshJson).meshes)))
   );
 }

@@ -12,6 +12,7 @@ export interface MapPolygon {
   id: string;
   sectionId: string;
   vertexIds: readonly string[];
+  source?: MapPolygonSource;
   uv?: readonly Vec2[];
   texturePage?: number;
   paletteId?: number;
@@ -22,6 +23,25 @@ export interface MapPolygon {
   };
   preserved?: Record<string, unknown>;
   isTextured: boolean;
+}
+
+export type PolygonBucketName =
+  | "texturedTriangles"
+  | "texturedQuads"
+  | "untexturedTriangles"
+  | "untexturedQuads";
+
+export interface MapPolygonSource {
+  schema: "editableMeshJson" | "consolidatedMeshJson";
+  sectionId: string;
+  sectionIndex?: number;
+  meshRef?: string;
+  meshDefinitionIndex?: number;
+  meshUseIndex?: number;
+  bucketName: PolygonBucketName;
+  polygonClass: string;
+  polygonIndex: number;
+  bucketIndex: number;
 }
 
 export interface MeshSection {
