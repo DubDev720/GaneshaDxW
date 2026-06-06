@@ -113,6 +113,7 @@ This split lets the web editor stay practical while still respecting original-fo
 
 ## Current Implementation
 
+>[!WARNING] The application i still in early stagess. I can not guarantee whether this tool witll run as epeted on  othis sywill or wont work
 The active browser migration lives in [`web/`](web/).
 
 **Implemented so far:**
