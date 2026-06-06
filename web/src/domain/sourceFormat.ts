@@ -20,6 +20,7 @@ export interface ConsolidatedMapPackageMetadata {
   format?: string;
   version?: number;
   mapId?: string;
+  originalTitle?: string;
   files?: Record<string, string>;
   sourcePackage?: Record<string, string>;
   variants?: readonly {

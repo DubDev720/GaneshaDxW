@@ -31,6 +31,16 @@ button {
   font: inherit;
 }
 
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
 .app-shell {
   position: relative;
   width: 100vw;
@@ -389,6 +399,10 @@ button {
   gap: 8px;
 }
 
+.file-button {
+  width: 100%;
+}
+
 .pan-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -710,6 +724,8 @@ button {
 }
 
 .control-button {
+  display: inline-grid;
+  align-items: center;
   min-height: 38px;
   border: 1px solid rgb(132 197 255 / 32%);
   border-radius: 8px;
@@ -726,10 +742,22 @@ button {
     transform 160ms ease;
 }
 
+.control-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+  transform: none;
+}
+
 .control-button:hover {
   border-color: rgb(132 197 255 / 70%);
   background: #2a3d52;
   transform: translateY(-1px);
+}
+
+.control-button:disabled:hover {
+  border-color: rgb(132 197 255 / 32%);
+  background: #223142;
+  transform: none;
 }
 
 .control-button:focus-visible {

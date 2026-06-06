@@ -16,8 +16,15 @@ The goal is reconstruction, not rendering implementation. These references descr
 - `08-variant-overlays.md`: general map-state variant overlay rules and base fallback behavior.
 - `09-semantic-references.md`: generated mesh and palette reference layer for consumers.
 - `10-consolidated-modern-export.md`: four-file-per-map consolidated JSON export and recommended editing model.
+- `HackticsMapData.md`: FFHacktics map data structure reference copied in as supplemental source-format context.
 - `source-evidence.md`: source-backed evidence table for the major interpretation rules.
 - `index.json`: machine-readable listing of the reference files and key package locations.
+
+## Supplemental Source-Format References
+
+`HackticsMapData.md` is included to assist format investigation and GaneshaDX compatibility work. Treat it as reference context, not as an automatic V1 scope expansion.
+
+If a field, chunk, byte range, or subsystem described there is not represented in the current consolidated/editor structure, do not assume that absence is a blocker or compatibility concern by default. Track only the pieces that are already represented, directly needed for current GaneshaDX-compatible import/export behavior, or explicitly promoted into scope later.
 
 ## Current Decoder Scope
 

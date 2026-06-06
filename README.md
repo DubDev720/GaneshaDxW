@@ -281,6 +281,20 @@ The detailed scope is now tracked in [`Web-Migration/V1-MIGRATION-SCOPE.md`](Web
 - Explore original binary import/export lanes.
 - Add larger editor workflows after the V1 compatibility baseline is stable.
 
+### Post-Parity Planned Features
+
+These are planned after the editor has reached full GaneshaDX feature parity. They are not V1 blockers and should not displace source-compatible editing, export safety, or parity work.
+
+1. Add automated hidden surface flagging for simplified PSX mod optimization.
+2. Add mesh animation editor interface.
+3. Add UV animation preview and editor interface, including integration or migration of existing tooling into a unified workflow.
+4. Add event manager and cutscene creation system.
+5. Add WoTL PSP compatibility.
+6. Add unified version constraint configuration.
+7. Add customization options.
+8. Integrate the overhauled spritesheet editor and manager.
+9. Add cutscene creator with video export.
+
 ***
 
 ## ⚙️⚡️⚙️ Running the Web Editor ⚙️⚡️⚙️

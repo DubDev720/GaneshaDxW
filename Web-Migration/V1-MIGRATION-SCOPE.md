@@ -13,7 +13,7 @@ These are the features that should be treated as release-shaping for V1.
 | Local package loading | Load local `gmapx-consolidated` packages through ignored runtime config. | Implemented baseline |
 | Source hygiene | Ship no generated maps, textures, palettes, metadata, or compiled outputs as tracked source. | Implemented baseline |
 | Package chooser | Select among locally configured packages instead of hardwiring MAP001. | Implemented baseline |
-| Package metadata | Display metadata, package health, provenance, and missing-resource warnings. | Partial |
+| Package metadata | Display metadata, original map titles, package health, provenance, and missing-resource warnings. | Partial |
 | Visual mesh rendering | Render triangles and quads with source-compatible winding and one-sided materials by default. | Implemented baseline |
 | Indexed texture rendering | Render texture pages through indexed texture data and palette lookup. | Implemented baseline |
 | UV correctness | Keep texture page, palette, UVs, and alpha behavior aligned with verified reference output. | Partial, needs regression tests |
@@ -98,7 +98,7 @@ This is the long-term parity map. Items here are not automatically V1 requiremen
 - [x] UV/debug display mode.
 - [x] Solid and wire-oriented debug modes.
 - [x] Game-view camera presets.
-- [x] Orthographic/isometric render toggle.
+- [x] Orthographic/perspective render toggle.
 - [x] Camera focus, reset, pan, orbit, and zoom.
 - [ ] Highlight selected polygons toggle parity.
 - [ ] Backface selection toggle parity.
@@ -228,6 +228,20 @@ This is the long-term parity map. Items here are not automatically V1 requiremen
 - [ ] Lossless binary round-trip.
 - [ ] Original-format patch authoring.
 - [ ] Community test-map suite.
+
+## Post-Parity Planned Features
+
+These are planned after full GaneshaDX feature parity. They should remain outside V1 and outside the parity checklist until the compatibility baseline is complete.
+
+1. [ ] Automated hidden surface flagging for simplified PSX mod optimization.
+2. [ ] Mesh animation editor interface.
+3. [ ] UV animation preview and editor interface, including integration or migration of existing tooling into a unified workflow.
+4. [ ] Event manager and cutscene creation system.
+5. [ ] WoTL PSP compatibility.
+6. [ ] Unified version constraint configuration.
+7. [ ] Customization options.
+8. [ ] Integration with overhauled spritesheet editor and manager.
+9. [ ] Cutscene creator with video export.
 
 ## V1 Done Criteria
 

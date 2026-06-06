@@ -47,4 +47,10 @@ without shipping them in source.
 bun install
 bun run dev
 bun run build
+bun run golden:round-trip
 ```
+
+`bun run golden:round-trip` imports local consolidated `mesh.json` files,
+exports them through the same source-shaped document exporter used by the UI,
+then imports the result again and verifies that the editable `MeshDocument`
+round-trips without changing. Pass explicit mesh paths to check specific files.

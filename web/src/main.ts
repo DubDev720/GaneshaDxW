@@ -1,4 +1,6 @@
 import "./styles.css";
+import { Object3D } from "three";
+import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
 import { sampleMapDocument } from "./domain/sampleMapDocument";
 import { editorTuning } from "./config/editorTuning";
 import { BrowserMapPackageLoader } from "./loaders/MapPackageLoader";
@@ -12,7 +14,6 @@ import type {
 } from "./renderer/types";
 import {
   getPolygon,
-  nudgeVertexPosition,
   updatePolygonInDocument,
   updateVertexPositionInDocument,
   type MeshDocument,
@@ -22,7 +23,14 @@ import {
 } from "./domain/mapDocument";
 import { EditCommandHistory } from "./domain/editCommandHistory";
 import { SelectionStore } from "./domain/selectionStore";
-import { exportConsolidatedMeshJson } from "./domain/consolidatedMeshExport";
+import {
+  buildMeshDocumentExport,
+  exportBlockingIssues,
+} from "./domain/documentImportExport";
+import {
+  formatOriginalMapLabel,
+  resolveOriginalMapTitle,
+} from "./domain/originalMapTitles";
 import type {
   IndexedTextureJson,
   MeshTextureMappingJsonRecord,
@@ -35,6 +43,7 @@ import type {
   PackageHealthStatus,
 } from "./domain/sourceFormat";
 import {
+  sanitizeVertexPosition,
   sanitizeMeshDocumentForGaneshaDx,
   validateMeshDocumentForGaneshaDx,
   type CompatibilityIssue,
@@ -55,7 +64,36 @@ type RenderHint =
   | {
       kind: "polygon";
       polygonId: string;
+    }
+  | {
+      kind: "transform";
+      scope: "vertex" | "edge" | "face";
+      polygonId: string;
+      vertexId?: string;
+      edgeIndex?: number;
     };
+
+interface TransformSession {
+  scope: "vertex" | "edge" | "face";
+  polygonId: string;
+  vertexIds: readonly string[];
+  originalPositions: Map<string, Vec3>;
+  anchorStart: Vec3;
+  latestDocument: MeshDocument;
+  moved: boolean;
+  vertexId?: string;
+  edgeIndex?: number;
+}
+
+interface TransformTarget {
+  scope: "vertex" | "edge" | "face";
+  polygon: MapPolygon;
+  polygonId: string;
+  vertexIds: readonly string[];
+  anchor: Vec3;
+  vertexId?: string;
+  edgeIndex?: number;
+}
 
 const app = document.querySelector<HTMLDivElement>("#app");
 
@@ -186,8 +224,8 @@ app.innerHTML = `
           <div class="control-group">
             <h2>Camera</h2>
             <div class="button-row">
-              <button class="control-button secondary" data-view-mode="isometric" type="button">Iso view</button>
-              <button class="control-button secondary" data-view-mode="orthogonal" type="button">Ortho view</button>
+              <button class="control-button secondary" data-view-mode="orthographic" type="button">Orthographic</button>
+              <button class="control-button secondary" data-view-mode="perspective" type="button">Perspective</button>
             </div>
             <div class="button-row">
               <button class="control-button secondary" data-focus-selection type="button">Focus</button>
@@ -223,7 +261,7 @@ app.innerHTML = `
             <dl class="facts compact">
               <div>
                 <dt>View mode</dt>
-                <dd id="camera-mode">isometric</dd>
+                <dd id="camera-mode">orthographic</dd>
               </div>
             </dl>
           </div>
@@ -237,6 +275,13 @@ app.innerHTML = `
               <button class="control-button" data-nudge="0,${editorTuning.editing.vertexNudgeStep},0">Y +</button>
               <button class="control-button" data-nudge="0,0,${-editorTuning.editing.vertexNudgeStep}">Z -</button>
               <button class="control-button" data-nudge="0,0,${editorTuning.editing.vertexNudgeStep}">Z +</button>
+            </div>
+          </div>
+          <div class="control-group">
+            <h2>Transform Gizmo</h2>
+            <div class="button-row">
+              <button class="control-button secondary" data-transform-toggle type="button">Gizmo</button>
+              <button class="control-button secondary" data-grid-snap-toggle type="button">Grid snap</button>
             </div>
           </div>
           <div class="control-group">
@@ -274,7 +319,16 @@ app.innerHTML = `
               <button class="control-button secondary" data-redo type="button">Redo</button>
             </div>
             <button class="control-button secondary" data-reset-document type="button">Reset document</button>
+          </div>
+          <div class="control-group">
+            <h2>Document I/O</h2>
+            <label class="control-button secondary file-button">
+              <span>Open mesh.json</span>
+              <input class="visually-hidden" data-import-document type="file" accept=".json,application/json">
+            </label>
             <button class="control-button" data-export-document type="button">Save mesh.json</button>
+            <button class="control-button secondary" data-round-trip-check type="button">Round-trip check</button>
+            <p id="document-io-status" class="inline-status">No document I/O checks run.</p>
           </div>
         </section>
 
@@ -332,11 +386,15 @@ const viewportPickText = queryElement<HTMLElement>("#viewport-pick");
 const cameraModeText = queryElement<HTMLElement>("#camera-mode");
 const textureResourceStatusText = queryElement<HTMLElement>("#texture-resource-status");
 const faceInspector = queryElement<HTMLElement>("#face-inspector");
+const documentIoStatusText = queryElement<HTMLElement>("#document-io-status");
 
 const { renderer, status } = await createThreeRenderer(canvas);
 const adapter = new GaneshaThreeRendererAdapter(renderer, status);
 const mapPackageLoader = new BrowserMapPackageLoader();
 const selectionStore = new SelectionStore();
+const transformAnchor = new Object3D();
+transformAnchor.visible = false;
+adapter.addSceneObject(transformAnchor);
 let loadedDocument = sampleMapDocument;
 let activeLoadedPackage: LoadedMapPackage | null = null;
 let availableMapPackages: readonly ConsolidatedMapPackageIndexEntry[] = [];
@@ -349,6 +407,8 @@ let activeRightTab: string = initialPanelTab(
   "edit",
 );
 let gameViewEnabled = false;
+let transformGizmoEnabled = true;
+let gridSnapEnabled = false;
 let displayOptions: RendererDisplayOptions = {
   mode: "textured",
   showTexturedPolygons: true,
@@ -361,9 +421,11 @@ let activeVertexDrag: {
   vertexId: string;
   polygonId: string;
   planeY: number;
+  originalPosition: Vec3;
   latestPosition: Vec3;
   moved: boolean;
 } | null = null;
+let activeTransformSession: TransformSession | null = null;
 let activeCameraDrag: {
   pointerId: number;
   previousClientX: number;
@@ -371,6 +433,17 @@ let activeCameraDrag: {
   mode: "pan" | "orbit";
 } | null = null;
 let isDisposed = false;
+const transformControls = new TransformControls(adapter.activeCamera, canvas);
+transformControls.mode = "translate";
+transformControls.space = "world";
+transformControls.size = editorTuning.editing.transformGizmoSize;
+transformControls.translationSnap = gridSnapEnabled ? editorTuning.editing.gridSnapStep : null;
+transformControls.enabled = false;
+adapter.addSceneObject(transformControls.getHelper());
+transformControls.getHelper().visible = false;
+transformControls.addEventListener("mouseDown", beginTransformSession);
+transformControls.addEventListener("objectChange", updateTransformSession);
+transformControls.addEventListener("mouseUp", completeTransformSession);
 
 statusText.textContent = `${adapter.status.backend.toUpperCase()} - ${adapter.status.reason}`;
 adapter.setDisplayOptions(displayOptions);
@@ -419,6 +492,10 @@ canvas.addEventListener("pointerdown", (event) => {
     return;
   }
 
+  if (event.button === 0 && transformControls.enabled) {
+    return;
+  }
+
   const pick = adapter.pick(event.clientX, event.clientY);
   if (!pick) {
     return;
@@ -437,6 +514,7 @@ canvas.addEventListener("pointerdown", (event) => {
         vertexId: pick.vertexId,
         polygonId: pick.polygonId,
         planeY: vertex.ganeshaDxPosition[1],
+        originalPosition: vertex.ganeshaDxPosition,
         latestPosition: vertex.ganeshaDxPosition,
         moved: false,
       };
@@ -481,11 +559,12 @@ canvas.addEventListener("pointermove", (event) => {
     return;
   }
 
-  activeVertexDrag.latestPosition = nextPosition;
+  const snappedPosition = snapEditingPosition(nextPosition);
+  activeVertexDrag.latestPosition = snappedPosition;
   activeVertexDrag.moved = true;
-  adapter.updateVertexPosition(activeVertexDrag.vertexId, nextPosition);
+  adapter.updateVertexPosition(activeVertexDrag.vertexId, snappedPosition);
   renderSelectedVertex(
-    updateVertexPositionInDocument(history.state, activeVertexDrag.vertexId, nextPosition),
+    updateVertexPositionInDocument(history.state, activeVertexDrag.vertexId, snappedPosition),
   );
 });
 
@@ -508,14 +587,26 @@ window.addEventListener("pointerup", (event) => {
   if (!completedDrag.moved) {
     return;
   }
+  if (
+    completedDrag.latestPosition[0] === completedDrag.originalPosition[0] &&
+    completedDrag.latestPosition[1] === completedDrag.originalPosition[1] &&
+    completedDrag.latestPosition[2] === completedDrag.originalPosition[2]
+  ) {
+    return;
+  }
 
   const nextDocument = updateVertexPositionInDocument(
     history.state,
     completedDrag.vertexId,
-    completedDrag.latestPosition,
+    snapEditingPosition(completedDrag.latestPosition),
   );
   const sanitized = sanitizeMeshDocumentForGaneshaDx(nextDocument);
-  history.execute(sanitized.document, { kind: "document" });
+  history.execute(sanitized.document, {
+    kind: "transform",
+    scope: "vertex",
+    polygonId: completedDrag.polygonId,
+    vertexId: completedDrag.vertexId,
+  });
   selectionStore.selectPolygon(completedDrag.polygonId);
   selectionStore.selectVertex(completedDrag.vertexId);
   renderDocument();
@@ -598,6 +689,18 @@ app.addEventListener("click", (event) => {
     return;
   }
 
+  if (target.closest("[data-transform-toggle]")) {
+    transformGizmoEnabled = !transformGizmoEnabled;
+    syncTransformControls();
+    return;
+  }
+
+  if (target.closest("[data-grid-snap-toggle]")) {
+    gridSnapEnabled = !gridSnapEnabled;
+    syncTransformControls();
+    return;
+  }
+
   const cameraPanButton = target.closest<HTMLElement>("[data-camera-pan]");
   if (cameraPanButton?.dataset.cameraPan) {
     const [deltaRight, deltaUp] = parsePair(cameraPanButton.dataset.cameraPan);
@@ -622,6 +725,20 @@ app.addEventListener("click", (event) => {
   const polygonButton = target.closest<HTMLElement>("[data-polygon-id]");
   if (polygonButton?.dataset.polygonId) {
     selectionStore.selectPolygon(polygonButton.dataset.polygonId);
+    selectionStore.selectVertex(null);
+    selectionStore.selectEdge(null);
+    renderDocumentUi();
+    return;
+  }
+
+  const edgeButton = target.closest<HTMLElement>("[data-edge-index]");
+  if (edgeButton?.dataset.edgeIndex && selectionStore.current.polygonId) {
+    const edgeIndex = Number(edgeButton.dataset.edgeIndex);
+    if (!Number.isInteger(edgeIndex)) {
+      return;
+    }
+    selectionStore.selectPolygon(selectionStore.current.polygonId);
+    selectionStore.selectEdge(edgeIndex);
     selectionStore.selectVertex(null);
     renderDocumentUi();
     return;
@@ -661,12 +778,26 @@ app.addEventListener("click", (event) => {
 
   if (target.closest("[data-export-document]")) {
     exportMeshDocument(history.state);
+    return;
+  }
+
+  if (target.closest("[data-round-trip-check]")) {
+    runGoldenRoundTripCheck(history.state);
   }
 });
 
 app.addEventListener("change", (event) => {
   const target = event.target;
   if (!(target instanceof HTMLInputElement) && !(target instanceof HTMLSelectElement)) {
+    return;
+  }
+
+  if (target instanceof HTMLInputElement && target.dataset.importDocument !== undefined) {
+    const file = target.files?.[0];
+    target.value = "";
+    if (file) {
+      void importMeshDocument(file);
+    }
     return;
   }
 
@@ -700,7 +831,7 @@ window.addEventListener("keydown", (event) => {
   if (event.key.toLowerCase() === "o") {
     event.preventDefault();
     adapter.setCameraViewMode(
-      adapter.cameraViewMode === "isometric" ? "orthogonal" : "isometric",
+      adapter.cameraViewMode === "orthographic" ? "perspective" : "orthographic",
     );
     syncCameraMode();
     return;
@@ -755,13 +886,21 @@ async function initializeMapPackages(): Promise<void> {
     consolidatedPackageRoot =
       localConfig?.consolidatedPackageRoot ?? DEFAULT_CONSOLIDATED_PACKAGE_ROOT;
     if (localConfig?.maps?.length) {
-      availableMapPackages = localConfig.maps.filter((entry) => entry.mapId && entry.path);
+      availableMapPackages = localConfig.maps
+        .filter((entry) => entry.mapId && entry.path)
+        .map((entry) => ({
+          ...entry,
+          label: formatOriginalMapLabel(entry.mapId, entry.label),
+        }));
       packageLoadStatusText.textContent = "Using local package config.";
     } else {
       const packageIndex = await mapPackageLoader.loadConsolidatedMapIndex(
         consolidatedPackageRoot,
       );
-      availableMapPackages = packageIndex.maps;
+      availableMapPackages = packageIndex.maps.map((entry) => ({
+        ...entry,
+        label: formatOriginalMapLabel(entry.mapId, entry.label),
+      }));
     }
     renderPackageChooser();
 
@@ -803,7 +942,7 @@ async function loadMapPackage(packageEntry: ConsolidatedMapPackageIndexEntry): P
     adapter.setRenderResources(loadedPackage.renderResources);
     inputPathText.textContent = `${loadedPackage.provenance.format} ${loadedPackage.provenance.mapId}`;
     mapPackageSelect.value = packageEntry.path;
-    packageLoadStatusText.textContent = `${packageEntry.label ?? packageEntry.mapId} loaded.`;
+    packageLoadStatusText.textContent = `${formatOriginalMapLabel(packageEntry.mapId, packageEntry.label)} loaded.`;
     selectInitialPolygon();
     renderDocument();
     updateCompatibilityStatus(loadedPackage.compatibilityIssues);
@@ -815,6 +954,57 @@ async function loadMapPackage(packageEntry: ConsolidatedMapPackageIndexEntry): P
   } finally {
     setPackageChooserBusy(false);
   }
+}
+
+async function importMeshDocument(file: File): Promise<void> {
+  documentIoStatusText.textContent = `Opening ${file.name}.`;
+  try {
+    const importedPackage = await mapPackageLoader.loadConsolidatedMeshFile(file);
+    const previousPackage = activeLoadedPackage;
+    const renderResources = previousPackage &&
+        previousPackage.provenance.mapId === importedPackage.provenance.mapId
+      ? previousPackage.renderResources
+      : importedPackage.renderResources;
+    const loadedPackage = {
+      ...importedPackage,
+      renderResources,
+      provenance: {
+        ...importedPackage.provenance,
+        sourcePath: file.name,
+      },
+    };
+    activeLoadedPackage = loadedPackage;
+    loadedDocument = loadedPackage.document;
+    history = new EditCommandHistory<MeshDocument, RenderHint>(loadedDocument);
+    adapter.setRenderResources(loadedPackage.renderResources);
+    inputPathText.textContent = `imported ${file.name}`;
+    packageLoadStatusText.textContent = `${file.name} imported as editable mesh document.`;
+    addImportedPackageOption(file.name, loadedDocument.id);
+    selectInitialPolygon();
+    renderDocument();
+    updateCompatibilityStatus(loadedPackage.compatibilityIssues);
+    renderPackageMetadata(loadedPackage);
+    syncTextureResourceStatus();
+    documentIoStatusText.textContent = `${file.name} imported.`;
+  } catch (error) {
+    console.error(`Failed to import ${file.name}`, error);
+    documentIoStatusText.textContent = `Import failed: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+function addImportedPackageOption(fileName: string, mapId: string): void {
+  const importValue = `import:${fileName}`;
+  const existingImportOption = [...mapPackageSelect.options].find(
+    (option) => option.value === importValue,
+  );
+  if (!existingImportOption) {
+    const option = documentElement("option");
+    option.value = importValue;
+    option.textContent = `Imported: ${formatOriginalMapLabel(mapId)}`;
+    mapPackageSelect.prepend(option);
+  }
+  mapPackageSelect.value = importValue;
+  mapPackageSelect.disabled = false;
 }
 
 async function loadLocalRuntimeConfig(): Promise<LocalRuntimeConfig | null> {
@@ -847,7 +1037,7 @@ function renderPackageChooser(): void {
     .map(
       (entry) => `
         <option value="${escapeHtml(entry.path)}">
-          ${escapeHtml(entry.label ?? entry.mapId)}
+          ${escapeHtml(formatOriginalMapLabel(entry.mapId, entry.label))}
         </option>
       `,
     )
@@ -872,6 +1062,25 @@ function renderChangedPolygon(polygonId: string): void {
 
 function renderHistoryTransition(): void {
   const hint = history.lastTransitionMetadata;
+  if (
+    hint?.kind === "transform" &&
+    getPolygon(history.state, hint.polygonId)
+  ) {
+    selectionStore.selectPolygon(hint.polygonId);
+    if (hint.scope === "vertex" && hint.vertexId) {
+      selectionStore.selectVertex(hint.vertexId);
+      selectionStore.selectEdge(null);
+    } else if (hint.scope === "edge" && typeof hint.edgeIndex === "number") {
+      selectionStore.selectEdge(hint.edgeIndex);
+      selectionStore.selectVertex(null);
+    } else {
+      selectionStore.selectVertex(null);
+      selectionStore.selectEdge(null);
+    }
+    renderDocument();
+    return;
+  }
+
   if (hint?.kind === "polygon" && getPolygon(history.state, hint.polygonId)) {
     selectionStore.selectPolygon(hint.polygonId);
     renderChangedPolygon(hint.polygonId);
@@ -882,16 +1091,19 @@ function renderHistoryTransition(): void {
 }
 
 function renderDocumentUi(): void {
+  const document = activeTransformSession?.latestDocument ?? history.state;
   adapter.selectPolygon(selectionStore.current.polygonId);
   adapter.selectVertex(selectionStore.current.vertexId);
-  renderSceneTree(history.state);
-  renderVertexList(history.state);
-  renderSelectedVertex(history.state);
-  renderFaceInspector(history.state);
-  updateCompatibilityStatus(validateMeshDocumentForGaneshaDx(history.state));
+  renderSceneTree(document);
+  renderVertexList(document);
+  renderSelectedVertex(document);
+  renderFaceInspector(document);
+  updateCompatibilityStatus(validateMeshDocumentForGaneshaDx(document));
   renderPackageMetadata(activeLoadedPackage);
   syncCameraMode();
+  syncTransformControls();
   syncTextureResourceStatus();
+  syncHistoryControls();
 }
 
 function disposeApp(): void {
@@ -902,7 +1114,11 @@ function disposeApp(): void {
   isDisposed = true;
   activeCameraDrag = null;
   activeVertexDrag = null;
+  activeTransformSession = null;
   resizeObserver.disconnect();
+  adapter.removeSceneObject(transformControls.getHelper());
+  adapter.removeSceneObject(transformAnchor);
+  transformControls.dispose();
   adapter.dispose();
 }
 
@@ -966,6 +1182,15 @@ function syncPanelToggles(): void {
   }
 }
 
+function syncHistoryControls(): void {
+  for (const button of app!.querySelectorAll<HTMLButtonElement>("[data-undo]")) {
+    button.disabled = !history.canUndo;
+  }
+  for (const button of app!.querySelectorAll<HTMLButtonElement>("[data-redo]")) {
+    button.disabled = !history.canRedo;
+  }
+}
+
 function updateViewportZoom(action: string): void {
   if (action === "in") {
     adapter.adjustZoom(editorTuning.camera.buttonZoomStep);
@@ -978,7 +1203,7 @@ function updateViewportZoom(action: string): void {
 }
 
 function updateCameraViewMode(mode: string): void {
-  if (mode !== "isometric" && mode !== "orthogonal") {
+  if (mode !== "orthographic" && mode !== "perspective") {
     return;
   }
 
@@ -1016,11 +1241,51 @@ function toggleDisplayOption(option: string): void {
 }
 
 function syncCameraMode(): void {
+  transformControls.camera = adapter.activeCamera;
   cameraModeText.textContent = adapter.cameraPresetLabel;
+  for (const button of app!.querySelectorAll<HTMLElement>("[data-view-mode]")) {
+    const active = button.dataset.viewMode === adapter.cameraViewMode;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  }
   for (const button of app!.querySelectorAll<HTMLElement>("[data-game-view]")) {
     button.classList.toggle("active", gameViewEnabled);
     button.setAttribute("aria-pressed", gameViewEnabled ? "true" : "false");
   }
+}
+
+function syncTransformControls(): void {
+  const target = getCurrentTransformTarget(history.state);
+  transformControls.camera = adapter.activeCamera;
+  transformControls.translationSnap = gridSnapEnabled
+    ? editorTuning.editing.gridSnapStep
+    : null;
+
+  for (const button of app!.querySelectorAll<HTMLElement>("[data-transform-toggle]")) {
+    button.classList.toggle("active", transformGizmoEnabled);
+    button.setAttribute("aria-pressed", transformGizmoEnabled ? "true" : "false");
+  }
+
+  for (const button of app!.querySelectorAll<HTMLElement>("[data-grid-snap-toggle]")) {
+    button.classList.toggle("active", gridSnapEnabled);
+    button.setAttribute("aria-pressed", gridSnapEnabled ? "true" : "false");
+  }
+
+  const active = transformGizmoEnabled && target !== null;
+  transformControls.enabled = active;
+  transformControls.getHelper().visible = active;
+
+  if (activeTransformSession) {
+    return;
+  }
+
+  if (!active || !target) {
+    transformControls.detach();
+    return;
+  }
+
+  transformAnchor.position.set(target.anchor[0], target.anchor[1], target.anchor[2]);
+  transformControls.attach(transformAnchor);
 }
 
 function syncDisplayControls(): void {
@@ -1092,6 +1357,10 @@ function renderPackageMetadata(loadedPackage: LoadedMapPackage | null): void {
     <div>
       <dt>Map ID</dt>
       <dd>${escapeHtml(metadata?.mapId ?? loadedPackage.provenance.mapId ?? loadedPackage.document.id)}</dd>
+    </div>
+    <div>
+      <dt>Original title</dt>
+      <dd>${escapeHtml(metadata?.originalTitle ?? loadedPackage.document.label ?? resolveOriginalMapTitle(loadedPackage.provenance.mapId) ?? "unknown")}</dd>
     </div>
     <div>
       <dt>Format</dt>
@@ -1233,6 +1502,215 @@ function focusCameraOnCurrentSelection(): void {
   ]);
 }
 
+function beginTransformSession(): void {
+  if (!transformControls.object) {
+    return;
+  }
+
+  const target = getCurrentTransformTarget(history.state);
+  if (!target) {
+    return;
+  }
+
+  activeTransformSession = {
+    scope: target.scope,
+    polygonId: target.polygonId,
+    vertexIds: target.vertexIds,
+    originalPositions: new Map(
+      target.vertexIds.map((vertexId) => {
+        const vertex = history.state.vertices.find((candidate) => candidate.id === vertexId);
+        return [vertexId, vertex?.ganeshaDxPosition ?? ([0, 0, 0] as Vec3)];
+      }),
+    ),
+    anchorStart: [...transformAnchor.position.toArray()] as Vec3,
+    latestDocument: history.state,
+    moved: false,
+    vertexId: target.vertexId,
+    edgeIndex: target.edgeIndex,
+  };
+}
+
+function updateTransformSession(): void {
+  const session = activeTransformSession;
+  if (!session) {
+    return;
+  }
+
+  const delta: Vec3 = [
+    transformAnchor.position.x - session.anchorStart[0],
+    transformAnchor.position.y - session.anchorStart[1],
+    transformAnchor.position.z - session.anchorStart[2],
+  ];
+  const nextPositions = new Map<string, Vec3>();
+
+  for (const [vertexId, originalPosition] of session.originalPositions) {
+    const nextPosition = snapEditingPosition([
+      originalPosition[0] + delta[0],
+      originalPosition[1] + delta[1],
+      originalPosition[2] + delta[2],
+    ]);
+    nextPositions.set(vertexId, nextPosition);
+    adapter.updateVertexPosition(vertexId, nextPosition);
+    if (
+      nextPosition[0] !== originalPosition[0] ||
+      nextPosition[1] !== originalPosition[1] ||
+      nextPosition[2] !== originalPosition[2]
+    ) {
+      session.moved = true;
+    }
+  }
+
+  session.latestDocument = applyVertexPositions(history.state, nextPositions);
+  renderDocumentUi();
+}
+
+function completeTransformSession(): void {
+  const session = activeTransformSession;
+  if (!session) {
+    return;
+  }
+
+  activeTransformSession = null;
+  if (!session.moved) {
+    syncTransformControls();
+    return;
+  }
+
+  const sanitized = sanitizeMeshDocumentForGaneshaDx(session.latestDocument);
+  history.execute(sanitized.document, {
+    kind: "transform",
+    scope: session.scope,
+    polygonId: session.polygonId,
+    vertexId: session.vertexId,
+    edgeIndex: session.edgeIndex,
+  });
+  renderDocument();
+}
+
+function getCurrentTransformTarget(document: MeshDocument): TransformTarget | null {
+  const polygon = getPolygon(document, selectionStore.current.polygonId);
+  if (!polygon) {
+    return null;
+  }
+
+  const vertexById = (vertexId: string): Vec3 | null => {
+    const vertex = document.vertices.find((candidate) => candidate.id === vertexId);
+    return vertex ? vertex.ganeshaDxPosition : null;
+  };
+
+  const polygonVertexPositions = polygon.vertexIds
+    .map((vertexId) => vertexById(vertexId))
+    .filter((position): position is Vec3 => position !== null);
+  if (polygonVertexPositions.length === 0) {
+    return null;
+  }
+
+  const selectedVertexId = selectionStore.current.vertexId;
+  if (selectedVertexId) {
+    const position = vertexById(selectedVertexId);
+    if (!position) {
+      return null;
+    }
+
+    return {
+      scope: "vertex",
+      polygon,
+      polygonId: polygon.id,
+      vertexIds: [selectedVertexId],
+      anchor: position,
+      vertexId: selectedVertexId,
+    };
+  }
+
+  const edgeIndex = selectionStore.current.edgeIndex;
+  if (edgeIndex !== null) {
+    const vertexId = polygon.vertexIds[edgeIndex];
+    const nextVertexId = polygon.vertexIds[(edgeIndex + 1) % polygon.vertexIds.length];
+    if (!vertexId || !nextVertexId) {
+      return null;
+    }
+    const first = vertexById(vertexId);
+    const second = vertexById(nextVertexId);
+    if (!first || !second) {
+      return null;
+    }
+
+    return {
+      scope: "edge",
+      polygon,
+      polygonId: polygon.id,
+      vertexIds: [vertexId, nextVertexId],
+      anchor: [
+        (first[0] + second[0]) / 2,
+        (first[1] + second[1]) / 2,
+        (first[2] + second[2]) / 2,
+      ] as Vec3,
+      edgeIndex,
+    };
+  }
+
+  return {
+    scope: "face",
+    polygon,
+    polygonId: polygon.id,
+    vertexIds: [...polygon.vertexIds],
+    anchor: [
+      polygonVertexPositions.reduce((sum, position) => sum + position[0], 0) /
+        polygonVertexPositions.length,
+      polygonVertexPositions.reduce((sum, position) => sum + position[1], 0) /
+        polygonVertexPositions.length,
+      polygonVertexPositions.reduce((sum, position) => sum + position[2], 0) /
+        polygonVertexPositions.length,
+    ] as Vec3,
+  };
+}
+
+function applyVertexPositions(document: MeshDocument, positions: Map<string, Vec3>): MeshDocument {
+  let nextDocument = document;
+  for (const [vertexId, position] of positions) {
+    nextDocument = updateVertexPositionInDocument(nextDocument, vertexId, position);
+  }
+  return nextDocument;
+}
+
+function findPolygonIdForVertex(document: MeshDocument, vertexId: string): string | null {
+  for (const section of document.sections) {
+    const polygon = section.polygons.find((candidate) => candidate.vertexIds.includes(vertexId));
+    if (polygon) {
+      return polygon.id;
+    }
+  }
+  return null;
+}
+
+function snapEditingPosition(position: Vec3): Vec3 {
+  if (!gridSnapEnabled) {
+    return sanitizeVertexPosition(position);
+  }
+
+  return sanitizeVertexPosition(snapVec3(position, editorTuning.editing.gridSnapStep));
+}
+
+function snapEditingDelta(delta: Vec3): Vec3 {
+  if (!gridSnapEnabled) {
+    return delta;
+  }
+
+  return snapVec3(delta, editorTuning.editing.gridSnapStep);
+}
+
+function snapVec3(position: Vec3, step: number): Vec3 {
+  if (!Number.isFinite(step) || step <= 0) {
+    return position;
+  }
+
+  return [
+    Math.round(position[0] / step) * step,
+    Math.round(position[1] / step) * step,
+    Math.round(position[2] / step) * step,
+  ];
+}
+
 function isGaneshaDirection(value: string | undefined): value is GaneshaCameraDirection {
   return value === "northwest" ||
     value === "northeast" ||
@@ -1297,12 +1775,23 @@ function renderVertexList(document: MeshDocument): void {
     return;
   }
 
+  const selectedEdgeVertices =
+    selectionStore.current.edgeIndex === null
+      ? null
+      : new Set<string>([
+          polygon.vertexIds[selectionStore.current.edgeIndex]!,
+          polygon.vertexIds[
+            (selectionStore.current.edgeIndex + 1) % polygon.vertexIds.length
+          ]!,
+        ]);
   vertexList.innerHTML = polygon.vertexIds
     .map((vertexId, index) => {
       const vertex = document.vertices.find((candidate) => candidate.id === vertexId);
       const selected = selectionStore.current.vertexId
         ? selectionStore.current.vertexId === vertexId
-        : true;
+        : selectedEdgeVertices
+          ? selectedEdgeVertices.has(vertexId)
+          : true;
       const position = vertex?.ganeshaDxPosition ?? [0, 0, 0];
       return `
         <button
@@ -1323,10 +1812,24 @@ function renderSelectedVertex(document: MeshDocument): void {
     (vertex) => vertex.id === selectionStore.current.vertexId,
   );
   const selectedPolygon = getPolygon(document, selectionStore.current.polygonId);
-  selectedVertexText.textContent = selectedVertex
-    ? `${selectedVertex.id}: ${selectedVertex.ganeshaDxPosition.join(", ")}`
-    : selectedPolygon
-      ? `${selectedPolygon.id}: all ${selectedPolygon.vertexIds.length} vertices`
+  if (selectedVertex) {
+    selectedVertexText.textContent = `${selectedVertex.id}: ${selectedVertex.ganeshaDxPosition.join(", ")}`;
+    return;
+  }
+
+  if (selectedPolygon && selectionStore.current.edgeIndex !== null) {
+    const edgeIndex = selectionStore.current.edgeIndex;
+    const currentVertex = selectedPolygon.vertexIds[edgeIndex]!;
+    const nextVertex =
+      selectedPolygon.vertexIds[(edgeIndex + 1) % selectedPolygon.vertexIds.length]!;
+    selectedVertexText.textContent = `${selectedPolygon.id}: edge ${String.fromCharCode(
+      65 + edgeIndex,
+    )} (${currentVertex} -> ${nextVertex})`;
+    return;
+  }
+
+  selectedVertexText.textContent = selectedPolygon
+    ? `${selectedPolygon.id}: all ${selectedPolygon.vertexIds.length} vertices`
     : "none";
 }
 
@@ -1344,10 +1847,11 @@ function renderFaceInspector(document: MeshDocument): void {
   const visibilityKeys = Object.keys(renderingProperties).filter((key) =>
     key.startsWith("invisible")
   );
+  const constraints = editorTuning.ganeshaDxConstraints;
   const terrain = polygon.terrainBinding ?? {
-    terrainX: 255,
-    terrainZ: 127,
-    terrainLevel: 0,
+    terrainX: constraints.terrainX.max,
+    terrainZ: constraints.terrainZ.max,
+    terrainLevel: constraints.terrainLevel.min,
   };
 
   faceInspector.innerHTML = `
@@ -1385,11 +1889,15 @@ function renderFaceInspector(document: MeshDocument): void {
       ${renderUvFields(polygon, polygonIssues)}
     </div>
     <div class="control-group">
+      <h2>Edges</h2>
+      ${renderEdgeFields(polygon)}
+    </div>
+    <div class="control-group">
       <h2>Terrain Binding</h2>
       <div class="field-grid">
-        ${renderNumberField("X", "terrainX", terrain.terrainX, 0, 255, polygonIssues)}
-        ${renderNumberField("Z", "terrainZ", terrain.terrainZ, 0, 127, polygonIssues)}
-        ${renderNumberField("Level", "terrainLevel", terrain.terrainLevel, 0, 1, polygonIssues)}
+        ${renderNumberField("X", "terrainX", terrain.terrainX, constraints.terrainX.min, constraints.terrainX.max, polygonIssues)}
+        ${renderNumberField("Z", "terrainZ", terrain.terrainZ, constraints.terrainZ.min, constraints.terrainZ.max, polygonIssues)}
+        ${renderNumberField("Level", "terrainLevel", terrain.terrainLevel, constraints.terrainLevel.min, constraints.terrainLevel.max, polygonIssues)}
       </div>
     </div>
     <div class="control-group">
@@ -1436,8 +1944,8 @@ function renderTextureFields(
 
   return `
     <div class="field-grid">
-      ${renderNumberField("Page", "texturePage", polygon.texturePage ?? 0, 0, 3, issues)}
-      ${renderNumberField("Palette", "paletteId", polygon.paletteId ?? 0, 0, 15, issues)}
+      ${renderNumberField("Page", "texturePage", polygon.texturePage ?? 0, editorTuning.ganeshaDxConstraints.texturePage.min, editorTuning.ganeshaDxConstraints.texturePage.max, issues)}
+      ${renderNumberField("Palette", "paletteId", polygon.paletteId ?? 0, editorTuning.ganeshaDxConstraints.paletteId.min, editorTuning.ganeshaDxConstraints.paletteId.max, issues)}
     </div>
   `;
 }
@@ -1449,6 +1957,7 @@ function renderUvFields(
   if (!polygon.isTextured) {
     return `<p class="empty-state">Untextured faces do not carry UV data.</p>`;
   }
+  const constraints = editorTuning.ganeshaDxConstraints.textureAtlas;
 
   return `
     <div class="uv-editor">
@@ -1457,11 +1966,38 @@ function renderUvFields(
           (uv, index) => `
             <div class="uv-row">
               <span>${String.fromCharCode(65 + index)}</span>
-              ${renderNumberField("U", `uv:${index}:u`, uv[0], 0, 255, issues)}
-              ${renderNumberField("V", `uv:${index}:v`, uv[1], 0, 255, issues)}
+              ${renderNumberField("U", `uv:${index}:u`, uv[0], 0, constraints.pageWidth - 1, issues)}
+              ${renderNumberField("V", `uv:${index}:v`, uv[1], 0, constraints.pageHeight - 1, issues)}
             </div>
           `,
         )
+        .join("")}
+    </div>
+  `;
+}
+
+function renderEdgeFields(polygon: MapPolygon): string {
+  if (polygon.vertexIds.length < 3) {
+    return `<p class="empty-state">No selectable edges on this face.</p>`;
+  }
+
+  return `
+    <div class="edge-grid">
+      ${polygon.vertexIds
+        .map((vertexId, index) => {
+          const nextVertexId = polygon.vertexIds[(index + 1) % polygon.vertexIds.length]!;
+          const selected = selectionStore.current.polygonId === polygon.id &&
+            selectionStore.current.edgeIndex === index;
+          return `
+            <button
+              class="control-button secondary edge-button ${selected ? "active" : ""}"
+              data-edge-index="${index}"
+              type="button"
+            >
+              ${escapeHtml(vertexId)} → ${escapeHtml(nextVertexId)}
+            </button>
+          `;
+        })
         .join("")}
     </div>
   `;
@@ -1530,9 +2066,17 @@ function updateSelectedPolygonField(
     return;
   }
 
-  const nextDocument = updatePolygonInDocument(history.state, polygonId, (polygon) =>
-    updatePolygonField(polygon, field, target),
-  );
+  const currentPolygon = getPolygon(history.state, polygonId);
+  if (!currentPolygon) {
+    return;
+  }
+
+  const nextPolygon = updatePolygonField(currentPolygon, field, target);
+  if (nextPolygon === currentPolygon) {
+    renderDocumentUi();
+    return;
+  }
+  const nextDocument = updatePolygonInDocument(history.state, polygonId, () => nextPolygon);
   history.execute(nextDocument, { kind: "polygon", polygonId });
   selectionStore.selectPolygon(polygonId);
   renderChangedPolygon(polygonId);
@@ -1544,28 +2088,40 @@ function updatePolygonField(
   target: HTMLInputElement | HTMLSelectElement,
 ): MapPolygon {
   if (field === "texturePage") {
+    const texturePage = parseIntegerInput(target.value, polygon.texturePage ?? 0);
+    if (texturePage === (polygon.texturePage ?? 0)) {
+      return polygon;
+    }
     return {
       ...polygon,
-      texturePage: parseIntegerInput(target.value, polygon.texturePage ?? 0),
+      texturePage,
     };
   }
   if (field === "paletteId") {
+    const paletteId = parseIntegerInput(target.value, polygon.paletteId ?? 0);
+    if (paletteId === (polygon.paletteId ?? 0)) {
+      return polygon;
+    }
     return {
       ...polygon,
-      paletteId: parseIntegerInput(target.value, polygon.paletteId ?? 0),
+      paletteId,
     };
   }
   if (field === "terrainX" || field === "terrainZ" || field === "terrainLevel") {
     const terrainBinding = polygon.terrainBinding ?? {
-      terrainX: 255,
-      terrainZ: 127,
-      terrainLevel: 0,
+      terrainX: editorTuning.ganeshaDxConstraints.terrainX.max,
+      terrainZ: editorTuning.ganeshaDxConstraints.terrainZ.max,
+      terrainLevel: editorTuning.ganeshaDxConstraints.terrainLevel.min,
     };
+    const nextValue = parseIntegerInput(target.value, terrainBinding[field]);
+    if (nextValue === terrainBinding[field]) {
+      return polygon;
+    }
     return {
       ...polygon,
       terrainBinding: {
         ...terrainBinding,
-        [field]: parseIntegerInput(target.value, terrainBinding[field]),
+        [field]: nextValue,
       },
     };
   }
@@ -1589,6 +2145,9 @@ function updateUvField(polygon: MapPolygon, field: string, value: string): MapPo
   const uvs = [...(polygon.uv ?? [])];
   const existing = uvs[uvIndex] ?? [0, 0];
   const nextValue = parseIntegerInput(value, axis === "u" ? existing[0] : existing[1]);
+  if (nextValue === (axis === "u" ? existing[0] : existing[1])) {
+    return polygon;
+  }
   uvs[uvIndex] = axis === "u"
     ? [nextValue, existing[1]]
     : [existing[0], nextValue];
@@ -1600,12 +2159,16 @@ function updateUvField(polygon: MapPolygon, field: string, value: string): MapPo
 }
 
 function updateRenderFlag(polygon: MapPolygon, key: string, checked: boolean): MapPolygon {
+  const renderingProperties = renderingPropertiesFor(polygon);
+  if (renderingProperties[key] === checked) {
+    return polygon;
+  }
   return {
     ...polygon,
     preserved: {
       ...(polygon.preserved ?? {}),
       renderingProperties: {
-        ...renderingPropertiesFor(polygon),
+        ...renderingProperties,
         [key]: checked,
       },
     },
@@ -1820,9 +2383,39 @@ function nudgeSelectedVertex(delta: Vec3): void {
     return;
   }
 
-  const nextDocument = nudgeVertexPosition(history.state, vertexId, delta);
+  const vertex = history.state.vertices.find((candidate) => candidate.id === vertexId);
+  if (!vertex) {
+    return;
+  }
+
+  const snappedDelta = gridSnapEnabled ? snapEditingDelta(delta) : delta;
+  const nextPosition: Vec3 = [
+    vertex.ganeshaDxPosition[0] + snappedDelta[0],
+    vertex.ganeshaDxPosition[1] + snappedDelta[1],
+    vertex.ganeshaDxPosition[2] + snappedDelta[2],
+  ];
+  const sanitizedPosition = snapEditingPosition(nextPosition);
+  if (
+    sanitizedPosition[0] === vertex.ganeshaDxPosition[0] &&
+    sanitizedPosition[1] === vertex.ganeshaDxPosition[1] &&
+    sanitizedPosition[2] === vertex.ganeshaDxPosition[2]
+  ) {
+    return;
+  }
+
+  const nextDocument = updateVertexPositionInDocument(history.state, vertexId, sanitizedPosition);
   const sanitized = sanitizeMeshDocumentForGaneshaDx(nextDocument);
-  history.execute(sanitized.document, { kind: "document" });
+  const polygonId =
+    selectionStore.current.polygonId ?? findPolygonIdForVertex(history.state, vertexId);
+  if (!polygonId) {
+    return;
+  }
+  history.execute(sanitized.document, {
+    kind: "transform",
+    scope: "vertex",
+    polygonId,
+    vertexId,
+  });
   renderDocument();
 }
 
@@ -1830,6 +2423,7 @@ function selectInitialPolygon(): void {
   const firstPolygon = loadedDocument.sections[0]?.polygons[0];
   selectionStore.selectPolygon(firstPolygon?.id ?? null);
   selectionStore.selectVertex(null);
+  selectionStore.selectEdge(null);
 }
 
 function updateCompatibilityStatus(issues: readonly CompatibilityIssue[]): void {
@@ -1842,8 +2436,8 @@ function updateCompatibilityStatus(issues: readonly CompatibilityIssue[]): void 
 }
 
 function exportMeshDocument(document: MeshDocument): void {
-  const issues = validateMeshDocumentForGaneshaDx(document);
-  const errors = issues.filter((issue) => issue.severity === "error");
+  const exportResult = buildMeshDocumentExport(activeLoadedPackage, document);
+  const errors = exportBlockingIssues(exportResult);
   if (errors.length > 0) {
     if (errors[0]?.polygonId) {
       selectionStore.selectPolygon(errors[0].polygonId);
@@ -1854,23 +2448,69 @@ function exportMeshDocument(document: MeshDocument): void {
     renderDocumentUi();
     compatibilityStatusText.textContent =
       `Export blocked: ${errors.length} field ${errors.length === 1 ? "error" : "errors"} must be fixed.`;
+    documentIoStatusText.textContent = compatibilityStatusText.textContent;
     return;
   }
 
-  const exportPayload = activeLoadedPackage?.rawMeshJson
-    ? exportConsolidatedMeshJson(activeLoadedPackage.rawMeshJson, document)
-    : document;
-  const blob = new Blob([`${JSON.stringify(exportPayload, null, 2)}\n`], {
+  const blob = new Blob([exportResult.json], {
     type: "application/json",
   });
   const url = URL.createObjectURL(blob);
   const link = documentElement("a");
   link.href = url;
-  link.download = activeLoadedPackage?.rawMeshJson
-    ? `${document.id}.consolidated.mesh.json`
-    : `${document.id}.mesh.json`;
+  link.download = exportResult.fileName;
   link.click();
   URL.revokeObjectURL(url);
+  documentIoStatusText.textContent = `Exported ${exportResult.fileName}.`;
+}
+
+function runGoldenRoundTripCheck(document: MeshDocument): void {
+  const exportResult = buildMeshDocumentExport(activeLoadedPackage, document);
+  const errors = exportBlockingIssues(exportResult);
+  if (errors.length > 0) {
+    documentIoStatusText.textContent =
+      `Round-trip blocked: ${errors.length} field ${errors.length === 1 ? "error" : "errors"} must be fixed.`;
+    return;
+  }
+
+  try {
+    const roundTripPackage = mapPackageLoader.loadConsolidatedMeshJson(
+      exportResult.payload,
+      `${exportResult.fileName}#round-trip`,
+    );
+    const before = stableDocumentSnapshot(document);
+    const after = stableDocumentSnapshot(roundTripPackage.document);
+    if (before !== after) {
+      console.warn("Golden round-trip document mismatch", {
+        before: document,
+        after: roundTripPackage.document,
+      });
+      documentIoStatusText.textContent =
+        "Round-trip failed: exported mesh imports to a different editable document.";
+      return;
+    }
+
+    documentIoStatusText.textContent =
+      `Round-trip passed: ${exportResult.fileName} imports back to the same editable document.`;
+  } catch (error) {
+    console.error("Golden round-trip failed", error);
+    documentIoStatusText.textContent =
+      `Round-trip failed: ${error instanceof Error ? error.message : String(error)}`;
+  }
+}
+
+function stableDocumentSnapshot(document: MeshDocument): string {
+  return JSON.stringify(document, (_key, value: unknown) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return value;
+    }
+
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).sort(([left], [right]) =>
+        left.localeCompare(right)
+      ),
+    );
+  });
 }
 
 function parseNudge(value: string): Vec3 {

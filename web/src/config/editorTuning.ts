@@ -1,4 +1,23 @@
 export const editorTuning = {
+  ganeshaDxConstraints: {
+    polygonVertexCounts: [3, 4],
+    paletteId: { min: 0, max: 15 },
+    texturePage: { min: 0, max: 3 },
+    textureAtlas: { pageWidth: 256, pageHeight: 256, atlasHeight: 1024 },
+    terrainX: { min: 0, max: 255 },
+    terrainZ: { min: 0, max: 127 },
+    terrainLevel: { min: 0, max: 1 },
+    byte: { min: 0, max: 255 },
+    nibble: { min: 0, max: 15 },
+    twoBit: { min: 0, max: 3 },
+    vertexPosition: {
+      x: { min: -32768, max: 32767 },
+      y: { min: -32768, max: 32767 },
+      z: { min: -32768, max: 32767 },
+    },
+    normalElevation: { min: -90, max: 90 },
+    normalAzimuth: { min: 0, max: 360 },
+  },
   camera: {
     basePixelsPerWorldUnit: 88,
     buttonZoomStep: 0.01,
@@ -24,6 +43,8 @@ export const editorTuning = {
     wheelZoomStep: 0.005,
   },
   editing: {
+    gridSnapStep: 4,
+    transformGizmoSize: 1.1,
     vertexNudgeStep: 1,
   },
   labels: {

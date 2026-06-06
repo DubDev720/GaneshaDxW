@@ -23,10 +23,14 @@ import {
   sanitizeMeshDocumentForGaneshaDx,
   validateMeshDocumentForGaneshaDx,
 } from "../domain/compatibility";
+import { editorTuning } from "../config/editorTuning";
+import { formatOriginalMapLabel, resolveOriginalMapTitle } from "../domain/originalMapTitles";
 
 export interface MapPackageLoader {
   loadConsolidatedMapIndex(baseUrl: string): Promise<ConsolidatedMapPackageIndex>;
   loadConsolidatedMapPackage(baseUrl: string): Promise<LoadedMapPackage>;
+  loadConsolidatedMeshFile(file: File): Promise<LoadedMapPackage>;
+  loadConsolidatedMeshJson(rawMeshJson: unknown, sourcePath?: string): LoadedMapPackage;
   loadOriginalGaneshaPackage(file: File): Promise<LoadedMapPackage>;
 }
 
@@ -144,7 +148,7 @@ export class BrowserMapPackageLoader implements MapPackageLoader {
     ];
     const packageHealth = this.buildPackageHealth(
       sanitized.document,
-      metadata,
+      this.decorateMetadata(metadata, sanitized.document.id),
       renderResources,
       compatibilityIssues,
     );
@@ -157,9 +161,48 @@ export class BrowserMapPackageLoader implements MapPackageLoader {
         mapId: sanitized.document.id,
       },
       rawMeshJson: mesh,
-      metadata,
+      metadata: this.decorateMetadata(metadata, sanitized.document.id),
       compatibilityIssues,
       packageHealth,
+      renderResources,
+    };
+  }
+
+  async loadConsolidatedMeshFile(file: File): Promise<LoadedMapPackage> {
+    const rawMeshJson = JSON.parse(await file.text()) as unknown;
+    return this.loadConsolidatedMeshJson(rawMeshJson, file.name);
+  }
+
+  loadConsolidatedMeshJson(rawMeshJson: unknown, sourcePath?: string): LoadedMapPackage {
+    const normalizedDocument = this.normalizeMeshJson(
+      rawMeshJson as NormalizedMeshJson | ConsolidatedMeshJson | EditableMeshJson,
+    );
+    const sanitized = sanitizeMeshDocumentForGaneshaDx(normalizedDocument);
+    const renderResources: RenderResourceBundle = {
+      palettes: { palettes: [] },
+      baseTextures: { textures: [] },
+      textureMapping: { mappings: [] },
+    };
+    const compatibilityIssues = [
+      ...sanitized.issues,
+      ...validateMeshDocumentForGaneshaDx(sanitized.document),
+    ];
+
+    return {
+      document: sanitized.document,
+      provenance: {
+        format: "gmapx-consolidated",
+        sourcePath,
+        mapId: sanitized.document.id,
+      },
+      rawMeshJson,
+      compatibilityIssues,
+      packageHealth: this.buildPackageHealth(
+        sanitized.document,
+        undefined,
+        renderResources,
+        compatibilityIssues,
+      ),
       renderResources,
     };
   }
@@ -292,7 +335,21 @@ export class BrowserMapPackageLoader implements MapPackageLoader {
     };
   }
 
-  private normalizeMeshJson(
+  private decorateMetadata(
+    metadata: ConsolidatedMapPackageMetadata | undefined,
+    mapId: string,
+  ): ConsolidatedMapPackageMetadata | undefined {
+    if (!metadata) {
+      return undefined;
+    }
+
+    return {
+      ...metadata,
+      originalTitle: resolveOriginalMapTitle(mapId),
+    };
+  }
+
+  normalizeMeshJson(
     mesh: NormalizedMeshJson | ConsolidatedMeshJson | EditableMeshJson,
   ): MeshDocument {
     if (this.isNormalizedMeshDocument(mesh)) {
@@ -354,7 +411,7 @@ export class BrowserMapPackageLoader implements MapPackageLoader {
 
     return {
       id: mesh.mapId ?? "consolidated-map",
-      label: mesh.label ?? mesh.mapId ?? "Consolidated map",
+      label: formatOriginalMapLabel(mesh.mapId, mesh.label),
       vertices: [...verticesById.values()],
       sections,
     };
@@ -460,7 +517,7 @@ export class BrowserMapPackageLoader implements MapPackageLoader {
 
     return {
       id: mesh.mapId ?? "editable-map",
-      label: `${mesh.mapId ?? "Editable map"} ${stateLabel}`,
+      label: `${formatOriginalMapLabel(mesh.mapId)} ${stateLabel}`,
       vertices: [...verticesById.values()],
       sections: [
         {
@@ -528,9 +585,12 @@ export class BrowserMapPackageLoader implements MapPackageLoader {
         paletteId: polygon.texture?.paletteId,
         terrainBinding: polygon.terrainBinding
           ? {
-              terrainX: polygon.terrainBinding.terrainX ?? 255,
-              terrainZ: polygon.terrainBinding.terrainZ ?? 127,
-              terrainLevel: polygon.terrainBinding.terrainLevel ?? 0,
+              terrainX: polygon.terrainBinding.terrainX ??
+                editorTuning.ganeshaDxConstraints.terrainX.max,
+              terrainZ: polygon.terrainBinding.terrainZ ??
+                editorTuning.ganeshaDxConstraints.terrainZ.max,
+              terrainLevel: polygon.terrainBinding.terrainLevel ??
+                editorTuning.ganeshaDxConstraints.terrainLevel.min,
             }
           : undefined,
         preserved: {

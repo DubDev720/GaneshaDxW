@@ -51,8 +51,11 @@ export class GaneshaThreeRendererAdapter implements GaneshaRendererAdapter {
   private store: MeshDocumentStore | null = null;
   private animationFrameId = 0;
   private selectedPolygonId: string | null = null;
+  private currentDocumentId: string | null = null;
   private readonly scene = new THREE.Scene();
-  private readonly camera = new THREE.OrthographicCamera(-4, 4, 3, -3, 1, 5000);
+  private readonly orthographicCamera = new THREE.OrthographicCamera(-4, 4, 3, -3, 1, 5000);
+  private readonly perspectiveCamera = new THREE.PerspectiveCamera(60, 1, 1, 5000);
+  private renderCamera: THREE.Camera;
   private readonly raycaster = new THREE.Raycaster();
   private readonly dragPlane = new THREE.Plane();
   private readonly root = new THREE.Group();
@@ -65,6 +68,7 @@ export class GaneshaThreeRendererAdapter implements GaneshaRendererAdapter {
   private selectionObject: THREE.Object3D | null = null;
   private selectedVertexId: string | null = null;
   private readonly cameraTarget = new THREE.Vector3(0, 0, 0);
+  private readonly defaultCameraTarget = new THREE.Vector3(0, 0, 0);
   private readonly basePixelsPerWorldUnit: number = editorTuning.camera.basePixelsPerWorldUnit;
   private readonly cameraDistance: number = editorTuning.camera.cameraDistance;
   private readonly minElevationDegrees: number = editorTuning.camera.minElevationDegrees;
@@ -75,7 +79,7 @@ export class GaneshaThreeRendererAdapter implements GaneshaRendererAdapter {
   private viewportWidth = 1;
   private viewportHeight = 1;
   private zoomLevel: number = editorTuning.camera.defaultZoom;
-  private viewMode: CameraViewMode = "isometric";
+  private projectionMode: CameraViewMode = "orthographic";
   private displayOptions: RendererDisplayOptions = {
     mode: "textured",
     showTexturedPolygons: true,
@@ -110,6 +114,7 @@ export class GaneshaThreeRendererAdapter implements GaneshaRendererAdapter {
     this.renderer = renderer;
     this.status = status;
     this.domElement = renderer.domElement;
+    this.renderCamera = this.orthographicCamera;
     this.scene.background = new THREE.Color(0x111418);
     this.updateCameraTransform();
     this.scene.add(this.root);
@@ -124,8 +129,12 @@ export class GaneshaThreeRendererAdapter implements GaneshaRendererAdapter {
     return this.zoomLevel;
   }
 
+  get activeCamera(): THREE.Camera {
+    return this.renderCamera;
+  }
+
   get cameraViewMode(): CameraViewMode {
-    return this.viewMode;
+    return this.projectionMode;
   }
 
   get cameraPresetLabel(): string {
@@ -133,7 +142,7 @@ export class GaneshaThreeRendererAdapter implements GaneshaRendererAdapter {
     const elevation = this.nearestGaneshaElevation();
     const directionLabel = direction ? directionLabels[direction] : `${Math.round(this.yawDegrees)} deg`;
     const elevationLabel = elevation ?? `${this.elevationDegrees.toFixed(1)} deg`;
-    return `${this.viewMode} / ${directionLabel} ${elevationLabel} / ${this.zoomLevel.toFixed(2)}x`;
+    return `${this.projectionMode} / ${directionLabel} ${elevationLabel} / ${this.zoomLevel.toFixed(2)}x`;
   }
 
   get textureResourceStatus(): TextureResourceStatus {
@@ -146,14 +155,30 @@ export class GaneshaThreeRendererAdapter implements GaneshaRendererAdapter {
     this.rebuildScene();
   }
 
+  addSceneObject(object: THREE.Object3D): void {
+    this.scene.add(object);
+  }
+
+  removeSceneObject(object: THREE.Object3D): void {
+    this.scene.remove(object);
+  }
+
   setRenderResources(resources: RenderResourceBundle | undefined): void {
     this.materialResolver.setRenderResources(resources);
     this.rebuildScene();
   }
 
   loadDocument(document: MeshDocument): void {
+    const isNewDocument = document.id !== this.currentDocumentId;
+    this.currentDocumentId = document.id;
     this.store = new InMemoryMeshDocumentStore(document);
-    this.updateCameraBounds(document);
+    const documentCenter = this.updateCameraBounds(document);
+    this.defaultCameraTarget.copy(documentCenter);
+    if (isNewDocument) {
+      this.cameraTarget.copy(documentCenter);
+      this.clampCameraTarget();
+      this.updateCameraTransform();
+    }
     this.rebuildScene();
   }
 
@@ -211,7 +236,7 @@ export class GaneshaThreeRendererAdapter implements GaneshaRendererAdapter {
       -(((clientY - rect.top) / rect.height) * 2 - 1),
     );
 
-    this.raycaster.setFromCamera(pointer, this.camera);
+    this.raycaster.setFromCamera(pointer, this.renderCamera);
     const intersections = this.raycaster.intersectObjects(
       [...this.polygonMeshes.values()].filter((mesh) => mesh.visible),
       false,
@@ -240,7 +265,7 @@ export class GaneshaThreeRendererAdapter implements GaneshaRendererAdapter {
       ((clientX - rect.left) / rect.width) * 2 - 1,
       -(((clientY - rect.top) / rect.height) * 2 - 1),
     );
-    this.raycaster.setFromCamera(pointer, this.camera);
+    this.raycaster.setFromCamera(pointer, this.renderCamera);
     this.dragPlane.set(new THREE.Vector3(0, 1, 0), -planeY);
     const intersection = new THREE.Vector3();
     const hit = this.raycaster.ray.intersectPlane(this.dragPlane, intersection);
@@ -266,15 +291,16 @@ export class GaneshaThreeRendererAdapter implements GaneshaRendererAdapter {
   }
 
   setCameraViewMode(mode: CameraViewMode): void {
-    this.viewMode = mode;
+    this.projectionMode = mode;
+    this.renderCamera = mode === "perspective" ? this.perspectiveCamera : this.orthographicCamera;
     this.updateCameraProjection();
+    this.updateCameraTransform();
   }
 
   setGaneshaCameraPreset(
     direction: GaneshaCameraDirection,
     elevation: GaneshaCameraElevation,
   ): void {
-    this.viewMode = "isometric";
     this.yawDegrees = ganeshaCameraDirections[direction];
     this.elevationDegrees = ganeshaCameraElevations[elevation];
     this.updateCameraTransform();
@@ -299,7 +325,7 @@ export class GaneshaThreeRendererAdapter implements GaneshaRendererAdapter {
 
   panCameraByScreenDelta(deltaX: number, deltaY: number): void {
     const worldPerPixel = 1 / (this.basePixelsPerWorldUnit * this.zoomLevel);
-    this.camera.updateMatrixWorld(true);
+    this.renderCamera.updateMatrixWorld(true);
 
     const right = this.getCameraRightOnGround();
     const up = this.getCameraUpOnGround();
@@ -328,11 +354,7 @@ export class GaneshaThreeRendererAdapter implements GaneshaRendererAdapter {
   }
 
   resetCamera(): void {
-    this.cameraTarget.set(
-      (this.panBounds.minX + this.panBounds.maxX) / 2,
-      Math.max(this.lowestVertexY + this.minCameraClearance, 0),
-      (this.panBounds.minZ + this.panBounds.maxZ) / 2,
-    );
+    this.cameraTarget.copy(this.defaultCameraTarget);
     this.yawDegrees = ganeshaCameraDirections.northwest;
     this.elevationDegrees = ganeshaCameraElevations.bottom;
     this.zoomLevel = editorTuning.camera.defaultZoom;
@@ -346,7 +368,7 @@ export class GaneshaThreeRendererAdapter implements GaneshaRendererAdapter {
     }
 
     const render = () => {
-      this.renderer.render(this.scene, this.camera);
+      this.renderer.render(this.scene, this.renderCamera);
       this.animationFrameId = window.requestAnimationFrame(render);
     };
 
@@ -402,33 +424,39 @@ export class GaneshaThreeRendererAdapter implements GaneshaRendererAdapter {
     const yaw = THREE.MathUtils.degToRad(this.yawDegrees);
     const elevation = THREE.MathUtils.degToRad(this.elevationDegrees);
     const horizontalDistance = Math.cos(elevation) * this.cameraDistance;
-    this.camera.up.set(0, 1, 0);
-    this.camera.position.set(
-      this.cameraTarget.x + Math.cos(yaw) * horizontalDistance,
-      Math.max(
-        this.cameraTarget.y + Math.sin(elevation) * this.cameraDistance,
-        this.lowestVertexY + this.minCameraClearance,
-      ),
-      this.cameraTarget.z + Math.sin(yaw) * horizontalDistance,
-    );
-
-    this.camera.lookAt(this.cameraTarget);
-    this.camera.updateMatrixWorld(true);
+    for (const camera of [this.orthographicCamera, this.perspectiveCamera]) {
+      camera.up.set(0, 1, 0);
+      camera.position.set(
+        this.cameraTarget.x + Math.cos(yaw) * horizontalDistance,
+        Math.max(
+          this.cameraTarget.y + Math.sin(elevation) * this.cameraDistance,
+          this.lowestVertexY + this.minCameraClearance,
+        ),
+        this.cameraTarget.z + Math.sin(yaw) * horizontalDistance,
+      );
+      camera.lookAt(this.cameraTarget);
+      camera.updateMatrixWorld(true);
+    }
   }
 
   private updateCameraProjection(): void {
     const aspect = this.viewportWidth / this.viewportHeight;
     const frustumHeight = this.viewportHeight / (this.basePixelsPerWorldUnit * this.zoomLevel);
-    this.camera.left = (-frustumHeight * aspect) / 2;
-    this.camera.right = (frustumHeight * aspect) / 2;
-    this.camera.top = frustumHeight / 2;
-    this.camera.bottom = -frustumHeight / 2;
-    this.camera.updateProjectionMatrix();
+    this.orthographicCamera.left = (-frustumHeight * aspect) / 2;
+    this.orthographicCamera.right = (frustumHeight * aspect) / 2;
+    this.orthographicCamera.top = frustumHeight / 2;
+    this.orthographicCamera.bottom = -frustumHeight / 2;
+    this.orthographicCamera.updateProjectionMatrix();
+
+    const zoomRatio = this.zoomLevel / editorTuning.camera.defaultZoom;
+    this.perspectiveCamera.aspect = aspect;
+    this.perspectiveCamera.fov = THREE.MathUtils.clamp(60 / zoomRatio, 12, 100);
+    this.perspectiveCamera.updateProjectionMatrix();
   }
 
-  private updateCameraBounds(document: MeshDocument): void {
+  private updateCameraBounds(document: MeshDocument): THREE.Vector3 {
     if (document.vertices.length === 0) {
-      return;
+      return new THREE.Vector3(0, 0, 0);
     }
 
     let minX = Infinity;
@@ -451,17 +479,20 @@ export class GaneshaThreeRendererAdapter implements GaneshaRendererAdapter {
       editorTuning.camera.panBoundsMinimumMargin,
       extent * editorTuning.camera.panBoundsMarginScale,
     );
+    const coordinateLimits = editorTuning.ganeshaDxConstraints.vertexPosition;
     this.lowestVertexY = minY;
     this.panBounds = {
-      minX: minX - margin,
-      maxX: maxX + margin,
-      minZ: minZ - margin,
-      maxZ: maxZ + margin,
+      minX: Math.max(minX - margin, coordinateLimits.x.min),
+      maxX: Math.min(maxX + margin, coordinateLimits.x.max),
+      minZ: Math.max(minZ - margin, coordinateLimits.z.min),
+      maxZ: Math.min(maxZ + margin, coordinateLimits.z.max),
     };
     this.clampCameraTarget();
+    return new THREE.Vector3((minX + maxX) / 2, 0, (minZ + maxZ) / 2);
   }
 
   private clampCameraTarget(): void {
+    const coordinateLimits = editorTuning.ganeshaDxConstraints.vertexPosition;
     this.cameraTarget.x = THREE.MathUtils.clamp(
       this.cameraTarget.x,
       this.panBounds.minX,
@@ -472,7 +503,11 @@ export class GaneshaThreeRendererAdapter implements GaneshaRendererAdapter {
       this.panBounds.minZ,
       this.panBounds.maxZ,
     );
-    this.cameraTarget.y = Math.max(this.cameraTarget.y, this.lowestVertexY);
+    this.cameraTarget.y = THREE.MathUtils.clamp(
+      this.cameraTarget.y,
+      coordinateLimits.y.min,
+      coordinateLimits.y.max,
+    );
   }
 
   private wrapDegrees(degrees: number): number {
@@ -505,22 +540,22 @@ export class GaneshaThreeRendererAdapter implements GaneshaRendererAdapter {
   }
 
   private getCameraRightOnGround(): THREE.Vector3 {
-    this.camera.updateMatrixWorld(true);
-    const right = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 0);
+    this.renderCamera.updateMatrixWorld(true);
+    const right = new THREE.Vector3().setFromMatrixColumn(this.renderCamera.matrixWorld, 0);
     right.y = 0;
     return right.lengthSq() > 0.000001 ? right.normalize() : new THREE.Vector3(1, 0, 0);
   }
 
   private getCameraUpOnGround(): THREE.Vector3 {
-    this.camera.updateMatrixWorld(true);
-    const up = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 1);
+    this.renderCamera.updateMatrixWorld(true);
+    const up = new THREE.Vector3().setFromMatrixColumn(this.renderCamera.matrixWorld, 1);
     up.y = 0;
     if (up.lengthSq() > 0.000001) {
       return up.normalize();
     }
 
     const forward = new THREE.Vector3();
-    this.camera.getWorldDirection(forward);
+    this.renderCamera.getWorldDirection(forward);
     forward.y = 0;
     return forward.lengthSq() > 0.000001
       ? forward.normalize()
@@ -703,7 +738,7 @@ export class GaneshaThreeRendererAdapter implements GaneshaRendererAdapter {
   private projectWorldPoint(position: Vec3): THREE.Vector3 {
     const point = new THREE.Vector3(position[0], position[1], position[2]);
     this.root.localToWorld(point);
-    return point.project(this.camera);
+    return point.project(this.renderCamera);
   }
 
   private findPolygonIdForVertex(document: MeshDocument, vertexId: string): string | null {

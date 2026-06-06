@@ -3,7 +3,7 @@ import type { MeshDocument, Vec3 } from "../domain/mapDocument";
 import type { RenderResourceBundle } from "../domain/renderResources";
 
 export type RendererBackend = "webgpu" | "webgl2";
-export type CameraViewMode = "isometric" | "orthogonal";
+export type CameraViewMode = "orthographic" | "perspective";
 export type GaneshaCameraDirection = "northwest" | "northeast" | "southwest" | "southeast";
 export type GaneshaCameraElevation = "top" | "bottom";
 export type RendererDisplayMode = "textured" | "uv-debug" | "solid" | "wireframe";
@@ -36,10 +36,13 @@ export interface RendererPickResult {
 export interface GaneshaRendererAdapter {
   readonly status: RendererAdapterStatus;
   readonly domElement: HTMLCanvasElement;
+  readonly activeCamera: THREE.Camera;
   readonly zoom: number;
   readonly cameraViewMode: CameraViewMode;
   readonly cameraPresetLabel: string;
   readonly textureResourceStatus: TextureResourceStatus;
+  addSceneObject(object: THREE.Object3D): void;
+  removeSceneObject(object: THREE.Object3D): void;
   setDisplayOptions(options: RendererDisplayOptions): void;
   setRenderResources(resources: RenderResourceBundle | undefined): void;
   loadDocument(document: MeshDocument): void;

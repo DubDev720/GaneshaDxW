@@ -1,4 +1,5 @@
 import type { MapPolygon, MeshDocument, Vec2, Vec3 } from "./mapDocument";
+import { editorTuning } from "../config/editorTuning";
 
 export interface CompatibilityIssue {
   severity: "error" | "warning";
@@ -11,21 +12,7 @@ export interface CompatibilityIssue {
   vertexId?: string;
 }
 
-export const ganeshaDxCompatibility = {
-  polygonVertexCounts: [3, 4],
-  paletteId: { min: 0, max: 15 },
-  texturePage: { min: 0, max: 3 },
-  textureAtlas: { pageWidth: 256, pageHeight: 256, atlasHeight: 1024 },
-  terrainX: { min: 0, max: 255 },
-  terrainZ: { min: 0, max: 127 },
-  terrainLevel: { min: 0, max: 1 },
-  byte: { min: 0, max: 255 },
-  nibble: { min: 0, max: 15 },
-  twoBit: { min: 0, max: 3 },
-  signedInt16: { min: -32768, max: 32767 },
-  normalElevation: { min: -90, max: 90 },
-  normalAzimuth: { min: 0, max: 360 },
-} as const;
+export const ganeshaDxCompatibility = editorTuning.ganeshaDxConstraints;
 
 export function sanitizeMeshDocumentForGaneshaDx(document: MeshDocument): {
   document: MeshDocument;
@@ -210,9 +197,9 @@ export function validateMeshDocumentForGaneshaDx(
 
 export function sanitizeVertexPosition(position: Vec3): Vec3 {
   return [
-    clampInteger(position[0], ganeshaDxCompatibility.signedInt16),
-    clampInteger(position[1], ganeshaDxCompatibility.signedInt16),
-    clampInteger(position[2], ganeshaDxCompatibility.signedInt16),
+    clampInteger(position[0], ganeshaDxCompatibility.vertexPosition.x),
+    clampInteger(position[1], ganeshaDxCompatibility.vertexPosition.y),
+    clampInteger(position[2], ganeshaDxCompatibility.vertexPosition.z),
   ];
 }
 

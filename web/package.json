@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "generate:render-resources": "bun scripts/generate-render-resources.ts",
+    "golden:round-trip": "bun scripts/golden-round-trip.ts",
     "import:map": "bun scripts/import-consolidated-map.ts",
     "import:map001": "bun scripts/import-consolidated-map.ts MAP001",
     "build": "tsc && vite build",
